@@ -18,12 +18,24 @@ type userEvent struct {
 	h Handler
 }
 
+// kbSet is a set of keybindings representing a mode
+type kbSet []*keybinding
+
+// modeMap
+type modeMap map[string]kbSet
+
 var (
 	// ErrQuit is used to decide if the MainLoop finished successfully.
 	ErrQuit = errors.New("quit")
 
 	// ErrUnknownView allows to assert if a View must be initialized.
 	ErrUnknownView = errors.New("unknown view")
+
+	// ErrUninitModMap checks map initialization
+	ErrUninitModMap = errors.New("Modes Map unitialized : Cant create mode")
+
+	// ErrUnknowMode checks map initialization
+	ErrUnknowMode = errors.New("unknown mode")
 )
 
 // Gui represents the whole User Interface, including the views, layouts
@@ -34,7 +46,8 @@ type Gui struct {
 	views       []*View
 	currentView *View
 	layout      Handler
-	keybindings []*keybinding
+	modes       modeMap
+	keybindings kbSet
 	maxX, maxY  int
 
 	// BgColor and FgColor allow to configure the background and foreground
@@ -74,8 +87,43 @@ func (g *Gui) Init() error {
 	g.BgColor = ColorBlack
 	g.FgColor = ColorWhite
 	g.Editor = DefaultEditor
+	g.modes = make(modeMap)
+
 	return nil
 }
+
+// CreateMode makes a new kbSet for the mode call name
+// If the mode already exists, the kbSet will be flush
+func (g *Gui) CreateMode(name string) error {
+	if g.modes == nil {
+		return ErrUninitModMap
+	}
+	g.modes[name] = make(kbSet, 0, 3)
+	return nil
+}
+
+// SetCurrentMode switches the current keybindings set according to input name
+func (g *Gui) SetCurrentMode(name string) error {
+	if g.modes == nil {
+		return ErrUninitModMap
+	}
+	if _, ok := g.modes[name]; !ok {
+		return ErrUnknowMode
+	}
+	g.keybindings = g.modes[name]
+	return nil
+}
+
+// GetModeKeyBindings returns keybindings set from its name
+// func (g *Gui) GetModeKeyBindings(name string) kbSet {
+// 	if g.modes == nil {
+// 		return nil
+// 	}
+// 	if _, ok := g.modes[name]; !ok {
+// 		return nil
+// 	}
+// 	return g.modes[name]
+// }
 
 // Close finalizes the library. It should be called after a successful
 // initialization and when gocui is not needed anymore.
@@ -214,7 +262,7 @@ func (g *Gui) CurrentView() *View {
 // SetKeybinding creates a new keybinding. If viewname equals to ""
 // (empty string) then the keybinding will apply to all views. key must
 // be a rune or a Key.
-func (g *Gui) SetKeybinding(viewname string, key interface{}, mod Modifier, h KeybindingHandler) error {
+func (g *Gui) SetKeybinding(modename string, viewname string, key interface{}, mod Modifier, h KeybindingHandler) error {
 	var kb *keybinding
 
 	switch k := key.(type) {
@@ -225,7 +273,7 @@ func (g *Gui) SetKeybinding(viewname string, key interface{}, mod Modifier, h Ke
 	default:
 		return errors.New("unknown type")
 	}
-	g.keybindings = append(g.keybindings, kb)
+	g.modes[modename] = append(g.modes[modename], kb)
 	return nil
 }
 
