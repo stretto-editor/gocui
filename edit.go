@@ -124,6 +124,10 @@ func (v *View) MoveCursor(dx, dy int, writeMode bool) {
 	maxX, maxY := v.Size()
 	cx, cy := v.cx+dx, v.cy+dy
 	x, y := v.ox+cx, v.oy+cy
+	if y > len(v.lines) {
+		cy -= y - len(v.lines)
+		y -= y - len(v.lines)
+	}
 
 	var curLineWidth, prevLineWidth int
 	// get the width of the current line
@@ -152,7 +156,7 @@ func (v *View) MoveCursor(dx, dy int, writeMode bool) {
 
 	// adjust cursor's x position and view's x origin
 	if x > curLineWidth { // move to next line
-		if dx > 0 { // horizontal movement
+		if dx > 0 && y < len(v.lines) { // horizontal movement
 			if !v.Wrap {
 				v.ox = 0
 			}
