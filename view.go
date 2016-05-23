@@ -456,7 +456,6 @@ func (v *View) Buffer() string {
 	for _, l := range v.lines {
 		str += string(l) + "\n"
 	}
-	str = str[:len(str)-2]
 	return strings.Replace(str, "\x00", " ", -1)
 }
 
@@ -467,7 +466,6 @@ func (v *View) ViewBuffer() string {
 	for _, l := range v.viewLines {
 		str += string(l.line) + "\n"
 	}
-	str = str[:len(str)-2]
 	return strings.Replace(str, "\x00", " ", -1)
 }
 
