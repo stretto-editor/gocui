@@ -313,16 +313,18 @@ func (g *Gui) MainLoop() error {
 		return err
 	}
 	for {
-		select {
-		case ev := <-g.tbEvents:
-			if err := g.handleEvent(&ev); err != nil {
-				return err
+		/*
+			select {
+			case ev := <-g.tbEvents:
+				if err := g.handleEvent(&ev); err != nil {
+					return err
+				}
+			case ev := <-g.userEvents:
+				if err := ev.h(g); err != nil {
+					return err
+				}
 			}
-		case ev := <-g.userEvents:
-			if err := ev.h(g); err != nil {
-				return err
-			}
-		}
+		*/
 		if err := g.consumeevents(); err != nil {
 			return err
 		}
