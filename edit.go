@@ -156,7 +156,7 @@ func (v *View) MoveCursor(dx, dy int, writeMode bool) {
 
 	// adjust cursor's x position and view's x origin
 	if x > curLineWidth { // move to next line
-		if dx > 0 && y < len(v.lines) { // horizontal movement
+		if dx > 0 { // horizontal movement
 			if !v.Wrap {
 				v.ox = 0
 			}
