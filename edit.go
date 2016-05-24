@@ -37,8 +37,8 @@ func simpleEditor(v *View, key Key, ch rune, mod Modifier) {
 		v.EditDelete(false)
 	case key == KeyInsert:
 		v.Overwrite = !v.Overwrite
-	case key == KeyEnter:
-		v.EditNewLine()
+		//case key == KeyEnter:
+		//v.EditNewLine()
 	case key == KeyArrowDown:
 		v.MoveCursor(0, 1, false)
 	case key == KeyArrowUp:
@@ -124,6 +124,10 @@ func (v *View) MoveCursor(dx, dy int, writeMode bool) {
 	maxX, maxY := v.Size()
 	cx, cy := v.cx+dx, v.cy+dy
 	x, y := v.ox+cx, v.oy+cy
+	if y > len(v.lines) {
+		cy -= y - len(v.lines)
+		y -= y - len(v.lines)
+	}
 
 	var curLineWidth, prevLineWidth int
 	// get the width of the current line

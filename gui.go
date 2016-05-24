@@ -24,6 +24,9 @@ var (
 
 	// ErrUnknownView allows to assert if a View must be initialized.
 	ErrUnknownView = errors.New("unknown view")
+
+	// ErrUnknowMode checks map initialization
+	ErrUnknowMode = errors.New("unknown mode")
 )
 
 // Gui represents the whole User Interface, including the views, layouts
@@ -34,7 +37,8 @@ type Gui struct {
 	views       []*View
 	currentView *View
 	layout      Handler
-	keybindings []*keybinding
+	modes       []*Mode
+	currentMode *Mode
 	maxX, maxY  int
 
 	// BgColor and FgColor allow to configure the background and foreground
@@ -74,7 +78,47 @@ func (g *Gui) Init() error {
 	g.BgColor = ColorBlack
 	g.FgColor = ColorWhite
 	g.Editor = DefaultEditor
+
 	return nil
+}
+
+// SetCurrentMode switches to the Mode with the given name
+func (g *Gui) SetCurrentMode(name string) error {
+	for _, m := range g.modes {
+		if m.name == name {
+			g.currentMode = m
+			return nil
+		}
+	}
+	return ErrUnknowMode
+}
+
+// CurrentMode returns the current mode
+func (g *Gui) CurrentMode() *Mode {
+	return g.currentMode
+}
+
+// Mode returns a pointer to the Mode with the given name, or error
+// ErrUnknownMode if a Mode with that name does not exist.
+func (g *Gui) Mode(name string) (*Mode, error) {
+	for _, m := range g.modes {
+		if m.name == name {
+			g.currentMode = m
+			return m, nil
+		}
+	}
+	return nil, ErrUnknowMode
+}
+
+// SetMode creates a new mode
+// does nothing if there is already a mode for this name
+func (g *Gui) SetMode(name string) {
+	if _, err := g.Mode(name); err == nil {
+		return
+	}
+
+	m := CreateMode(name)
+	g.modes = append(g.modes, m)
 }
 
 // Close finalizes the library. It should be called after a successful
@@ -214,18 +258,21 @@ func (g *Gui) CurrentView() *View {
 // SetKeybinding creates a new keybinding. If viewname equals to ""
 // (empty string) then the keybinding will apply to all views. key must
 // be a rune or a Key.
-func (g *Gui) SetKeybinding(viewname string, key interface{}, mod Modifier, h KeybindingHandler) error {
+func (g *Gui) SetKeybinding(modeName string, viewName string, key interface{}, mod Modifier, h KeybindingHandler) error {
 	var kb *keybinding
 
 	switch k := key.(type) {
 	case Key:
-		kb = newKeybinding(viewname, k, 0, mod, h)
+		kb = newKeybinding(viewName, k, 0, mod, h)
 	case rune:
-		kb = newKeybinding(viewname, 0, k, mod, h)
+		kb = newKeybinding(viewName, 0, k, mod, h)
 	default:
 		return errors.New("unknown type")
 	}
-	g.keybindings = append(g.keybindings, kb)
+
+	if m, err := g.Mode(modeName); err == nil {
+		*m.GetKeyBindings() = append(*m.GetKeyBindings(), kb)
+	}
 	return nil
 }
 
@@ -266,6 +313,7 @@ func (g *Gui) MainLoop() error {
 		return err
 	}
 	for {
+
 		select {
 		case ev := <-g.tbEvents:
 			if err := g.handleEvent(&ev); err != nil {
@@ -276,6 +324,7 @@ func (g *Gui) MainLoop() error {
 				return err
 			}
 		}
+
 		if err := g.consumeevents(); err != nil {
 			return err
 		}
@@ -560,7 +609,7 @@ func (g *Gui) onKey(ev *termbox.Event) error {
 		curView = v
 	}
 
-	for _, kb := range g.keybindings {
+	for _, kb := range g.currentMode.keybindings {
 		if kb.h == nil {
 			continue
 		}

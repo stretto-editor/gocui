@@ -115,6 +115,9 @@ type keybinding struct {
 	h        KeybindingHandler
 }
 
+// kbSet is a set of keybindings representing a mode
+type kbSet []*keybinding
+
 // newKeybinding returns a new Keybinding object.
 func newKeybinding(viewname string, key Key, ch rune, mod Modifier, h KeybindingHandler) (kb *keybinding) {
 	kb = &keybinding{

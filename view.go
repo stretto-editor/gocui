@@ -95,6 +95,11 @@ func (v *View) Name() string {
 	return v.name
 }
 
+// Size returns the number of lines contained in the buffer
+func (v *View) BufferSize() int {
+	return len(v.lines)
+}
+
 // setRune writes a rune at the given point, relative to the view. It
 // checks if the position is valid and applies the view's colors, taking
 // into account if the cell must be highlighted.
