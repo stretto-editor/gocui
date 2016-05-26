@@ -59,7 +59,12 @@ type View struct {
 	Autoscroll bool
 
 	// If Frame is true, Title allows to configure a title for the view.
+	// Title will be placed on the top-left corner
 	Title string
+
+	// If Frame is true, Footer allows to configure a footer for the view.
+	// Title will be placed on the bottom-right corner
+	Footer string
 
 	// If Mask is true, the View will display the mask instead of the real
 	// content

@@ -395,6 +395,11 @@ func (g *Gui) flush() error {
 					return err
 				}
 			}
+			if v.Footer != "" {
+				if err := g.drawFooter(v); err != nil {
+					return err
+				}
+			}
 		}
 
 		if err := g.draw(v); err != nil {
@@ -458,6 +463,26 @@ func (g *Gui) drawTitle(v *View) error {
 			break
 		}
 		if err := g.SetRune(x, v.y0, ch); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// drawFooter draws the footer of the view.
+func (g *Gui) drawFooter(v *View) error {
+	if v.y1 < 0 || v.y1 >= g.maxY {
+		return nil
+	}
+
+	for i, ch := range v.Footer {
+		x := v.x1 + i - 2 - len(v.Footer)
+		if x < 0 {
+			continue
+		} else if x > v.x1-2 || x >= g.maxX {
+			break
+		}
+		if err := g.SetRune(x, v.y1, ch); err != nil {
 			return err
 		}
 	}
