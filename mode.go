@@ -1,18 +1,38 @@
 package gocui
 
+type openModeHandler func(*Gui) error
+type closeModeHandler func(*Gui) error
+
+// Mode is the struct that associates to a mode name a set of keybindings
+// and functions to execute when you switch to the mode or from the mode to another
 type Mode struct {
 	name        string
 	keybindings kbSet
+	openMode    openModeHandler
+	closeMode   closeModeHandler
 }
 
-func CreateMode(name string) *Mode {
-	return &Mode{name: name}
+//CreateMode create a mode with the given name, and opening and closing functions
+func CreateMode(name string, openMode openModeHandler, closeMode closeModeHandler) *Mode {
+	return &Mode{name: name, openMode: openMode, closeMode: closeMode}
 }
 
+//GetKeyBindings gives a pointer to the set of keybindings associate to the mode
 func (m *Mode) GetKeyBindings() *kbSet {
 	return &m.keybindings
 }
 
+// Name returns the name of the mode
 func (m *Mode) Name() string {
 	return m.name
+}
+
+// OpenMode execute the file handler to execute at the opening of the mode
+func (m *Mode) OpenMode(g *Gui) {
+	m.openMode(g)
+}
+
+// CloseMode execute the file handler to execute at the closing time of the mode
+func (m *Mode) CloseMode(g *Gui) {
+	m.closeMode(g)
 }

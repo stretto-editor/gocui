@@ -110,15 +110,13 @@ func (g *Gui) Mode(name string) (*Mode, error) {
 	return nil, ErrUnknowMode
 }
 
-// SetMode creates a new mode
+// AddMode creates a new mode
 // does nothing if there is already a mode for this name
-func (g *Gui) SetMode(name string) {
+func (g *Gui) AddMode(name string, openFunc openModeHandler, closeFunc closeModeHandler) {
 	if _, err := g.Mode(name); err == nil {
 		return
 	}
-
-	m := CreateMode(name)
-	g.modes = append(g.modes, m)
+	g.modes = append(g.modes, CreateMode(name, openFunc, closeFunc))
 }
 
 // Close finalizes the library. It should be called after a successful
