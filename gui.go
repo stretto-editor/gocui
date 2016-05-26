@@ -303,7 +303,7 @@ func (g *Gui) MainLoop() error {
 		}
 	}()
 
-	inputMode := termbox.InputAlt
+	inputMode := termbox.InputEsc
 	if g.Mouse {
 		inputMode |= termbox.InputMouse
 	}
