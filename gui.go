@@ -112,7 +112,7 @@ func (g *Gui) Mode(name string) (*Mode, error) {
 
 // AddMode creates a new mode
 // does nothing if there is already a mode for this name
-func (g *Gui) AddMode(name string, openFunc openModeHandler, closeFunc closeModeHandler) {
+func (g *Gui) AddMode(name string, openFunc modeHandler, closeFunc modeHandler) {
 	if _, err := g.Mode(name); err == nil {
 		return
 	}

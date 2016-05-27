@@ -520,3 +520,10 @@ func (v *View) Word(x, y int) (string, error) {
 func indexFunc(r rune) bool {
 	return r == ' ' || r == 0
 }
+
+func (v *View) SetEditable(b bool) {
+	v.Editable = b
+}
+func (v *View) IsEditable() bool {
+	return v.Editable
+}
