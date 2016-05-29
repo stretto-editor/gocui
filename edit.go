@@ -39,14 +39,16 @@ func simpleEditor(v *View, key Key, ch rune, mod Modifier) {
 		v.Overwrite = !v.Overwrite
 		//case key == KeyEnter:
 		//v.EditNewLine()
-	case key == KeyArrowDown:
-		v.MoveCursor(0, 1, false)
-	case key == KeyArrowUp:
-		v.MoveCursor(0, -1, false)
-	case key == KeyArrowLeft:
-		v.MoveCursor(-1, 0, false)
-	case key == KeyArrowRight:
-		v.MoveCursor(1, 0, false)
+		/*
+			case key == KeyArrowDown:
+				v.MoveCursor(0, 1, false)
+			case key == KeyArrowUp:
+				v.MoveCursor(0, -1, false)
+			case key == KeyArrowLeft:
+				v.MoveCursor(-1, 0, false)
+			case key == KeyArrowRight:
+				v.MoveCursor(1, 0, false)
+		*/
 	}
 }
 
