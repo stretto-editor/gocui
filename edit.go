@@ -105,6 +105,189 @@ func (v *View) EditDelete(back bool) {
 	}
 }
 
+// bol : beginning of line
+func (v *View) bol() bool {
+	return v.ox == 0 && v.cx == 0
+}
+
+// bob : beginning of buffer
+func (v *View) bob() bool {
+	return v.cx == 0
+}
+
+// eol : end of line
+func (v *View) eol() bool {
+	rx, ry, err := v.realPosition(v.cx, v.cy)
+	if err != nil {
+		return false
+	}
+	return rx == len(v.lines[ry])
+}
+
+// eob : end of line in the buffer
+// warning : lines in a buffer does not end with '\0' or '\n'
+func (v *View) eob() bool {
+	return v.cx+v.ox == len(v.viewLines[v.oy].line)
+}
+
+// eov : end of view
+func (v *View) eov() bool {
+	return v.cx+1 == v.x1-v.x0-1
+}
+
+// firstLine checks if the current cursor is placed in the first line of the file
+func (v *View) firstLine() bool {
+	return v.cy+v.oy == 0
+}
+
+// lastLine checks if the current cursor is placed in the lastLine line of the file
+func (v *View) lastLine() bool {
+	_, ry, err := v.realPosition(v.cx, v.cy)
+	if err != nil {
+		return false
+	}
+	return ry+1 == len(v.lines)
+}
+
+// firstBufferLine checks if the current cursor is placed in the first line of the buffer
+func (v *View) firstBufferLine() bool {
+	return v.cy == 0
+}
+
+// lastBufferLine checks if the current cursor is placed in the lastLine line of the buffer
+func (v *View) lastBufferLine() bool {
+	return v.cy+1 == v.y1-v.y0-1
+}
+
+// lastValidateLineInView checks if the current cursor is placed in the
+// last validated line in the view. If the view is full, this corresponds to
+// check if the cursor is placed in the last line of the view. If the the text
+// does not use all the view, this corresponds to check if the cursor is placed
+// in the last line representing the file
+func (v *View) lastValidateLineInView() bool {
+	return v.cy+1 == len(v.viewLines)
+}
+
+// adjustPositionToCurrentString move the cursor and the origin af the view given
+// the length of the string to suit to.
+func (v *View) adjustPositionToCurrentString(width int) {
+	if v.Wrap {
+		v.cx = width
+	} else {
+		maxX, _ := v.Size()
+		if width-v.ox < maxX {
+			if width < v.ox {
+				v.ox = width
+			}
+			v.cx = width - v.ox
+		} else {
+			v.ox = width - maxX + 1
+			v.cx = maxX
+		}
+	}
+}
+
+// getPreviousLineLength will return the length of the previous line. The current
+// cursor's position need to be contain into the view area.
+// Take into account wrap and side effect for the first line of the view
+func (v *View) getPreviousLineLength() (prevLineWidth int) {
+	maxX, _ := v.Size()
+	if v.firstBufferLine() {
+		_, ry, err := v.realPosition(v.cx, v.cy)
+		if err != nil {
+			return
+		}
+		line := v.lines[ry]
+		prevLineWidth = len(line) % maxX
+	} else {
+		prevLineWidth = len(v.viewLines[v.oy+v.cy-1].line)
+	}
+	return
+}
+
+// moveOneRuneForward will move the cursor one character forward and adjust the
+// origin of the view if necessary.
+func (v *View) moveOneRuneForward() {
+	if v.lastLine() && v.eol() {
+		return
+	}
+	if v.eol() || v.eov() && v.Wrap {
+		_, oy := v.Origin()
+		if v.lastBufferLine() {
+			v.SetOrigin(0, oy+1)
+		} else {
+			v.SetOrigin(0, oy)
+		}
+		v.cx = 0
+		v.cy++
+	} else if v.eov() && !v.Wrap {
+		v.ox++
+	} else {
+		v.cx++
+	}
+}
+
+// moveOneRuneForward will move the cursor one character backward and adjust the
+// origin of the view if necessary
+func (v *View) moveOneRuneBackward() {
+	if v.firstLine() && v.bol() {
+		return
+	}
+	if v.bol() {
+		prevLineLength := v.getPreviousLineLength()
+		if v.firstBufferLine() {
+			v.oy--
+		}
+		v.cy--
+		v.adjustPositionToCurrentString(prevLineLength)
+	} else if v.bob() {
+		v.ox--
+	} else {
+		v.cx--
+	}
+}
+
+// moveOneRuneForward will move the cursor one line upper and adjust the
+// origin of the view if necessary
+func (v *View) moveOneLineUpper() {
+	if v.firstLine() {
+		return
+	}
+	prevLineLength := v.getPreviousLineLength()
+	if v.firstBufferLine() {
+		v.oy--
+	}
+	v.cy--
+	if v.cx >= prevLineLength {
+		v.adjustPositionToCurrentString(prevLineLength)
+	}
+}
+
+// moveOneRuneForward will move the cursor one line lower and adjust the
+// origin of the view if necessary
+func (v *View) moveOneLineLower() {
+	if v.lastLine() && v.lastValidateLineInView() {
+		return
+	}
+	var nextLineWidth int
+	if v.lastBufferLine() {
+		maxX, _ := v.Size()
+		v.oy++
+		_, ry, err := v.realPosition(v.cx, v.cy)
+		if err != nil {
+			return
+		}
+		line := v.lines[ry]
+		nextLineWidth = len(line) % maxX
+	} else {
+		nextLineWidth = len(v.viewLines[v.oy+v.cy+1].line)
+		v.cy++
+	}
+	if v.cx >= nextLineWidth {
+		v.adjustPositionToCurrentString(nextLineWidth)
+	}
+}
+
 // EditNewLine inserts a new line under the cursor.
 func (v *View) EditNewLine() {
 	v.breakLine(v.cx, v.cy)
