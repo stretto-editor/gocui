@@ -58,6 +58,21 @@ func (v *View) EditWrite(ch rune) {
 	v.MoveCursor(1, 0, true)
 }
 
+// EditNewLine inserts a new line under the cursor.
+func (v *View) EditNewLine() {
+	v.breakLine(v.cx, v.cy)
+
+	y := v.oy + v.cy
+	if y >= len(v.viewLines) || (y >= 0 && y < len(v.viewLines) &&
+		!(v.Wrap && v.cx == 0 && v.viewLines[y].linesX > 0)) {
+		// new line at the end of the buffer or
+		// cursor is not at the beginning of a wrapped line
+		v.ox = 0
+		v.cx = 0
+		v.MoveCursor(0, 1, true)
+	}
+}
+
 // EditDelete deletes a rune at the cursor position. back determines the
 // direction.
 func (v *View) EditDelete(back bool) {
@@ -103,6 +118,11 @@ func (v *View) EditDelete(back bool) {
 			v.deleteRune(v.cx, v.cy)
 		}
 	}
+}
+
+// isEmpty checks if the view has no line yet
+func (v *View) isEmpty() bool {
+	return v.lines == nil
 }
 
 // bol : beginning of line
@@ -207,18 +227,24 @@ func (v *View) getPreviousLineLength() (prevLineWidth int) {
 
 // moveOneRuneForward will move the cursor one character forward and adjust the
 // origin of the view if necessary.
-func (v *View) moveOneRuneForward() {
-	if v.lastLine() && v.eol() {
+func (v *View) moveOneRuneForward(writeMode bool) {
+	if v.isEmpty() || (v.lastLine() && v.eol()) {
 		return
 	}
-	if v.eol() || v.eov() && v.Wrap {
+	if v.eol() && writeMode {
+		v.cx++
+	} else if v.eol() && !writeMode || v.eov() && v.Wrap {
 		_, oy := v.Origin()
 		if v.lastBufferLine() {
 			v.SetOrigin(0, oy+1)
 		} else {
 			v.SetOrigin(0, oy)
 		}
-		v.cx = 0
+		if v.eov() && v.Wrap {
+			v.cx = 1
+		} else {
+			v.cx = 0
+		}
 		v.cy++
 	} else if v.eov() && !v.Wrap {
 		v.ox++
@@ -266,7 +292,7 @@ func (v *View) moveOneLineUpper() {
 // moveOneRuneForward will move the cursor one line lower and adjust the
 // origin of the view if necessary
 func (v *View) moveOneLineLower() {
-	if v.lastLine() && v.lastValidateLineInView() {
+	if v.isEmpty() || v.lastLine() || v.lastValidateLineInView() {
 		return
 	}
 	var nextLineWidth int
@@ -288,130 +314,138 @@ func (v *View) moveOneLineLower() {
 	}
 }
 
-// EditNewLine inserts a new line under the cursor.
-func (v *View) EditNewLine() {
-	v.breakLine(v.cx, v.cy)
-
-	y := v.oy + v.cy
-	if y >= len(v.viewLines) || (y >= 0 && y < len(v.viewLines) &&
-		!(v.Wrap && v.cx == 0 && v.viewLines[y].linesX > 0)) {
-		// new line at the end of the buffer or
-		// cursor is not at the beginning of a wrapped line
-		v.ox = 0
-		v.cx = 0
-		v.MoveCursor(0, 1, true)
-	}
-}
-
 // MoveCursor moves the cursor taking into account the width of the line/view,
 // displacing the origin if necessary.
 func (v *View) MoveCursor(dx, dy int, writeMode bool) {
-	maxX, maxY := v.Size()
-	cx, cy := v.cx+dx, v.cy+dy
-	x, y := v.ox+cx, v.oy+cy
-	if y > len(v.lines) {
-		cy -= y - len(v.lines)
-		y -= y - len(v.lines)
-	}
-
-	var curLineWidth, prevLineWidth int
-	// get the width of the current line
-	if writeMode {
-		if v.Wrap {
-			curLineWidth = maxX - 1
-		} else {
-			curLineWidth = maxInt
+	if dy < 0 {
+		for i := 0; i > dy; i-- {
+			v.moveOneLineUpper()
 		}
-	} else {
-		if y >= 0 && y < len(v.viewLines) {
-			curLineWidth = len(v.viewLines[y].line)
-			if v.Wrap && curLineWidth >= maxX {
-				curLineWidth = maxX - 1
-			}
-		} else {
-			curLineWidth = 0
-		}
-	}
-	// get the width of the previous line
-	if y-1 >= 0 && y-1 < len(v.viewLines) {
-		prevLineWidth = len(v.viewLines[y-1].line)
-	} else {
-		prevLineWidth = 0
-	}
-
-	// adjust cursor's x position and view's x origin
-	if x > curLineWidth { // move to next line
-		if dx > 0 { // horizontal movement
-			if !v.Wrap {
-				v.ox = 0
-			}
-			v.cx = 0
-			cy++
-		} else { // vertical movement
-			if curLineWidth > 0 { // move cursor to the EOL
-				if v.Wrap {
-					v.cx = curLineWidth
-				} else {
-					ncx := curLineWidth - v.ox
-					if ncx < 0 {
-						v.ox += ncx
-						if v.ox < 0 {
-							v.ox = 0
-						}
-						v.cx = 0
-					} else {
-						v.cx = ncx
-					}
-				}
-			} else {
-				if !v.Wrap {
-					v.ox = 0
-				}
-				v.cx = 0
-			}
-		}
-	} else if cx < 0 {
-		if !v.Wrap && v.ox > 0 { // move origin to the left
-			v.ox--
-		} else { // move to previous line
-			if prevLineWidth > 0 {
-				if !v.Wrap { // set origin so the EOL is visible
-					nox := prevLineWidth - maxX + 1
-					if nox < 0 {
-						v.ox = 0
-					} else {
-						v.ox = nox
-					}
-				}
-				v.cx = prevLineWidth
-			} else {
-				if !v.Wrap {
-					v.ox = 0
-				}
-				v.cx = 0
-			}
-			cy--
-		}
-	} else { // stay on the same line
-		if v.Wrap {
-			v.cx = cx
-		} else {
-			if cx >= maxX {
-				v.ox++
-			} else {
-				v.cx = cx
-			}
+	} else if dy > 0 {
+		for i := 0; i < dy; i++ {
+			v.moveOneLineLower()
 		}
 	}
 
-	// adjust cursor's y position and view's y origin
-	if cy >= maxY {
-		v.oy++
-	} else if cy < 0 {
-		if v.oy > 0 {
-			v.oy--
+	if dx < 0 {
+		for i := 0; i > dx; i-- {
+			v.moveOneRuneBackward()
 		}
-	} else {
-		v.cy = cy
+	} else if dx > 0 {
+		for i := 0; i < dx; i++ {
+			v.moveOneRuneForward(writeMode)
+		}
 	}
+	// if writeMode && v.eol() && dx > 0 {
+	// 	v.moveOneRuneForward(writeMode)
+	// }
+	//
+	// maxX, maxY := v.Size()
+	// cx, cy := v.cx+dx, v.cy+dy
+	// x, y := v.ox+cx, v.oy+cy
+	// if y > len(v.lines) {
+	// 	cy -= y - len(v.lines)
+	// 	y -= y - len(v.lines)
+	// }
+	//
+	// var curLineWidth, prevLineWidth int
+	// // get the width of the current line
+	// if writeMode {
+	// 	if v.Wrap {
+	// 		curLineWidth = maxX - 1
+	// 	} else {
+	// 		curLineWidth = maxInt
+	// 	}
+	// } else {
+	// 	if y >= 0 && y < len(v.viewLines) {
+	// 		curLineWidth = len(v.viewLines[y].line)
+	// 		if v.Wrap && curLineWidth >= maxX {
+	// 			curLineWidth = maxX - 1
+	// 		}
+	// 	} else {
+	// 		curLineWidth = 0
+	// 	}
+	// }
+	// // get the width of the previous line
+	// if y-1 >= 0 && y-1 < len(v.viewLines) {
+	// 	prevLineWidth = len(v.viewLines[y-1].line)
+	// } else {
+	// 	prevLineWidth = 0
+	// }
+	//
+	// // adjust cursor's x position and view's x origin
+	// if x > curLineWidth { // move to next line
+	// 	if dx > 0 { // horizontal movement
+	// 		if !v.Wrap {
+	// 			v.ox = 0
+	// 		}
+	// 		v.cx = 0
+	// 		cy++
+	// 	} else { // vertical movement
+	// 		if curLineWidth > 0 { // move cursor to the EOL
+	// 			if v.Wrap {
+	// 				v.cx = curLineWidth
+	// 			} else {
+	// 				ncx := curLineWidth - v.ox
+	// 				if ncx < 0 {
+	// 					v.ox += ncx
+	// 					if v.ox < 0 {
+	// 						v.ox = 0
+	// 					}
+	// 					v.cx = 0
+	// 				} else {
+	// 					v.cx = ncx
+	// 				}
+	// 			}
+	// 		} else {
+	// 			if !v.Wrap {
+	// 				v.ox = 0
+	// 			}
+	// 			v.cx = 0
+	// 		}
+	// 	}
+	// } else if cx < 0 {
+	// 	if !v.Wrap && v.ox > 0 { // move origin to the left
+	// 		v.ox--
+	// 	} else { // move to previous line
+	// 		if prevLineWidth > 0 {
+	// 			if !v.Wrap { // set origin so the EOL is visible
+	// 				nox := prevLineWidth - maxX + 1
+	// 				if nox < 0 {
+	// 					v.ox = 0
+	// 				} else {
+	// 					v.ox = nox
+	// 				}
+	// 			}
+	// 			v.cx = prevLineWidth
+	// 		} else {
+	// 			if !v.Wrap {
+	// 				v.ox = 0
+	// 			}
+	// 			v.cx = 0
+	// 		}
+	// 		cy--
+	// 	}
+	// } else { // stay on the same line
+	// 	if v.Wrap {
+	// 		v.cx = cx
+	// 	} else {
+	// 		if cx >= maxX {
+	// 			v.ox++
+	// 		} else {
+	// 			v.cx = cx
+	// 		}
+	// 	}
+	// }
+	//
+	// // adjust cursor's y position and view's y origin
+	// if cy >= maxY {
+	// 	v.oy++
+	// } else if cy < 0 {
+	// 	if v.oy > 0 {
+	// 		v.oy--
+	// 	}
+	// } else {
+	// 	v.cy = cy
+	// }
 }

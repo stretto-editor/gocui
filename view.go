@@ -239,6 +239,9 @@ func (v *View) Rewind() {
 // draw re-draws the view's contents.
 func (v *View) draw() error {
 	maxX, maxY := v.Size()
+	if v.Wrap {
+		maxX--
+	}
 
 	if v.Wrap {
 		if maxX == 0 {
