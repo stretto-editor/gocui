@@ -27,6 +27,8 @@ type View struct {
 	tainted   bool       // marks if the viewBuffer must be updated
 	viewLines []viewLine // internal representation of the view's buffer
 
+	Hidden bool // if true the view will not be drawn
+
 	// BgColor and FgColor allow to configure the background and foreground
 	// colors of the View.
 	BgColor, FgColor Attribute

@@ -6,7 +6,7 @@ package gocui
 
 import (
 	"errors"
-
+	"fmt"
 	"github.com/nsf/termbox-go"
 )
 
@@ -158,7 +158,7 @@ func (g *Gui) Rune(x, y int) (rune, error) {
 // be initialized. It checks if the position is valid.
 func (g *Gui) SetView(name string, x0, y0, x1, y1 int) (*View, error) {
 	if x0 >= x1 || y0 >= y1 {
-		return nil, errors.New("invalid dimensions")
+		return nil, errors.New(fmt.Sprintf("invalide dim: %d, %d %s", y1, x1, name))
 	}
 	if name == "" {
 		return nil, errors.New("invalid name")
