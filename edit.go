@@ -37,18 +37,6 @@ func simpleEditor(v *View, key Key, ch rune, mod Modifier) {
 		v.EditDelete(false)
 	case key == KeyInsert:
 		v.Overwrite = !v.Overwrite
-		//case key == KeyEnter:
-		//v.EditNewLine()
-		/*
-			case key == KeyArrowDown:
-				v.MoveCursor(0, 1, false)
-			case key == KeyArrowUp:
-				v.MoveCursor(0, -1, false)
-			case key == KeyArrowLeft:
-				v.MoveCursor(-1, 0, false)
-			case key == KeyArrowRight:
-				v.MoveCursor(1, 0, false)
-		*/
 	}
 }
 
@@ -190,20 +178,37 @@ func (v *View) lastValidateLineInView() bool {
 
 // adjustPositionToCurrentString move the cursor and the origin af the view given
 // the length of the string to suit to.
-func (v *View) adjustPositionToCurrentString(width int) {
-	if v.Wrap {
-		v.cx = width
-	} else {
-		maxX, _ := v.Size()
-		if width-v.ox < maxX {
-			if width < v.ox {
-				v.ox = width
-			}
-			v.cx = width - v.ox
-		} else {
-			v.ox = width - maxX + 1
-			v.cx = maxX
+func (v *View) adjustPositionToCurrentString() {
+	vx := v.ox + v.cx
+	vy := v.oy + v.cy
+	if vx < 0 || vy < 0 {
+		return
+	}
+
+	if len(v.viewLines) == 0 {
+		// return vx, vy, nil
+		return
+	}
+	if vy < len(v.viewLines) {
+		vline := v.viewLines[vy]
+		if vx > len(vline.line) {
+			v.goToEndOfLine(len(vline.line))
 		}
+	}
+}
+
+// goToEndOfLine will place the cursor at the end of the line given the length
+// of the line to feet
+func (v *View) goToEndOfLine(lineLength int) {
+	maxX, _ := v.Size()
+	if lineLength-v.ox < maxX {
+		if lineLength < v.ox {
+			v.ox = lineLength
+		}
+		v.cx = lineLength - v.ox
+	} else {
+		v.ox = lineLength - maxX + 1
+		v.cx = maxX
 	}
 }
 
@@ -260,17 +265,24 @@ func (v *View) moveOneRuneBackward() {
 		return
 	}
 	if v.bol() {
-		prevLineLength := v.getPreviousLineLength()
 		if v.firstBufferLine() {
 			v.oy--
 		}
 		v.cy--
-		v.adjustPositionToCurrentString(prevLineLength)
+
+		vline := v.viewLines[v.oy+v.cy]
+		len := len(vline.line)
+		if v.Wrap {
+			v.cx = len
+		} else {
+			v.goToEndOfLine(len)
+		}
 	} else if v.bob() {
 		v.ox--
 	} else {
 		v.cx--
 	}
+	return
 }
 
 // moveOneRuneForward will move the cursor one line upper and adjust the
@@ -279,39 +291,28 @@ func (v *View) moveOneLineUpper() {
 	if v.firstLine() {
 		return
 	}
-	prevLineLength := v.getPreviousLineLength()
 	if v.firstBufferLine() {
 		v.oy--
+	} else {
+		v.cy--
 	}
-	v.cy--
-	if v.cx >= prevLineLength {
-		v.adjustPositionToCurrentString(prevLineLength)
-	}
+	return
 }
 
 // moveOneRuneForward will move the cursor one line lower and adjust the
 // origin of the view if necessary
-func (v *View) moveOneLineLower() {
-	if v.isEmpty() || v.lastLine() || v.lastValidateLineInView() {
+func (v *View) moveOneLineLower(writeMode bool) {
+	if v.isEmpty() || v.lastLine() || (v.lastValidateLineInView() && !writeMode) {
 		return
 	}
-	var nextLineWidth int
-	if v.lastBufferLine() {
-		maxX, _ := v.Size()
+	if v.lastValidateLineInView() && writeMode {
+		v.cy++
+	} else if v.lastBufferLine() {
 		v.oy++
-		_, ry, err := v.realPosition(v.cx, v.cy)
-		if err != nil {
-			return
-		}
-		line := v.lines[ry]
-		nextLineWidth = len(line) % maxX
 	} else {
-		nextLineWidth = len(v.viewLines[v.oy+v.cy+1].line)
 		v.cy++
 	}
-	if v.cx >= nextLineWidth {
-		v.adjustPositionToCurrentString(nextLineWidth)
-	}
+	return
 }
 
 // MoveCursor moves the cursor taking into account the width of the line/view,
@@ -323,129 +324,20 @@ func (v *View) MoveCursor(dx, dy int, writeMode bool) {
 		}
 	} else if dy > 0 {
 		for i := 0; i < dy; i++ {
-			v.moveOneLineLower()
+			v.moveOneLineLower(writeMode)
 		}
 	}
+	v.adjustPositionToCurrentString()
 
+	// Run through columns
 	if dx < 0 {
 		for i := 0; i > dx; i-- {
 			v.moveOneRuneBackward()
+			v.adjustPositionToCurrentString()
 		}
 	} else if dx > 0 {
 		for i := 0; i < dx; i++ {
 			v.moveOneRuneForward(writeMode)
 		}
 	}
-	// if writeMode && v.eol() && dx > 0 {
-	// 	v.moveOneRuneForward(writeMode)
-	// }
-	//
-	// maxX, maxY := v.Size()
-	// cx, cy := v.cx+dx, v.cy+dy
-	// x, y := v.ox+cx, v.oy+cy
-	// if y > len(v.lines) {
-	// 	cy -= y - len(v.lines)
-	// 	y -= y - len(v.lines)
-	// }
-	//
-	// var curLineWidth, prevLineWidth int
-	// // get the width of the current line
-	// if writeMode {
-	// 	if v.Wrap {
-	// 		curLineWidth = maxX - 1
-	// 	} else {
-	// 		curLineWidth = maxInt
-	// 	}
-	// } else {
-	// 	if y >= 0 && y < len(v.viewLines) {
-	// 		curLineWidth = len(v.viewLines[y].line)
-	// 		if v.Wrap && curLineWidth >= maxX {
-	// 			curLineWidth = maxX - 1
-	// 		}
-	// 	} else {
-	// 		curLineWidth = 0
-	// 	}
-	// }
-	// // get the width of the previous line
-	// if y-1 >= 0 && y-1 < len(v.viewLines) {
-	// 	prevLineWidth = len(v.viewLines[y-1].line)
-	// } else {
-	// 	prevLineWidth = 0
-	// }
-	//
-	// // adjust cursor's x position and view's x origin
-	// if x > curLineWidth { // move to next line
-	// 	if dx > 0 { // horizontal movement
-	// 		if !v.Wrap {
-	// 			v.ox = 0
-	// 		}
-	// 		v.cx = 0
-	// 		cy++
-	// 	} else { // vertical movement
-	// 		if curLineWidth > 0 { // move cursor to the EOL
-	// 			if v.Wrap {
-	// 				v.cx = curLineWidth
-	// 			} else {
-	// 				ncx := curLineWidth - v.ox
-	// 				if ncx < 0 {
-	// 					v.ox += ncx
-	// 					if v.ox < 0 {
-	// 						v.ox = 0
-	// 					}
-	// 					v.cx = 0
-	// 				} else {
-	// 					v.cx = ncx
-	// 				}
-	// 			}
-	// 		} else {
-	// 			if !v.Wrap {
-	// 				v.ox = 0
-	// 			}
-	// 			v.cx = 0
-	// 		}
-	// 	}
-	// } else if cx < 0 {
-	// 	if !v.Wrap && v.ox > 0 { // move origin to the left
-	// 		v.ox--
-	// 	} else { // move to previous line
-	// 		if prevLineWidth > 0 {
-	// 			if !v.Wrap { // set origin so the EOL is visible
-	// 				nox := prevLineWidth - maxX + 1
-	// 				if nox < 0 {
-	// 					v.ox = 0
-	// 				} else {
-	// 					v.ox = nox
-	// 				}
-	// 			}
-	// 			v.cx = prevLineWidth
-	// 		} else {
-	// 			if !v.Wrap {
-	// 				v.ox = 0
-	// 			}
-	// 			v.cx = 0
-	// 		}
-	// 		cy--
-	// 	}
-	// } else { // stay on the same line
-	// 	if v.Wrap {
-	// 		v.cx = cx
-	// 	} else {
-	// 		if cx >= maxX {
-	// 			v.ox++
-	// 		} else {
-	// 			v.cx = cx
-	// 		}
-	// 	}
-	// }
-	//
-	// // adjust cursor's y position and view's y origin
-	// if cy >= maxY {
-	// 	v.oy++
-	// } else if cy < 0 {
-	// 	if v.oy > 0 {
-	// 		v.oy--
-	// 	}
-	// } else {
-	// 	v.cy = cy
-	// }
 }
