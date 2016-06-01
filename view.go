@@ -27,6 +27,8 @@ type View struct {
 	tainted   bool       // marks if the viewBuffer must be updated
 	viewLines []viewLine // internal representation of the view's buffer
 
+	Hidden bool // if true the view will not be drawn
+
 	// BgColor and FgColor allow to configure the background and foreground
 	// colors of the View.
 	BgColor, FgColor Attribute
@@ -59,7 +61,12 @@ type View struct {
 	Autoscroll bool
 
 	// If Frame is true, Title allows to configure a title for the view.
+	// Title will be placed on the top-left corner
 	Title string
+
+	// If Frame is true, Footer allows to configure a footer for the view.
+	// Title will be placed on the bottom-right corner
+	Footer string
 
 	// If Mask is true, the View will display the mask instead of the real
 	// content
@@ -232,6 +239,9 @@ func (v *View) Rewind() {
 // draw re-draws the view's contents.
 func (v *View) draw() error {
 	maxX, maxY := v.Size()
+	if v.Wrap {
+		maxX--
+	}
 
 	if v.Wrap {
 		if maxX == 0 {
@@ -514,4 +524,11 @@ func (v *View) Word(x, y int) (string, error) {
 // and 0.
 func indexFunc(r rune) bool {
 	return r == ' ' || r == 0
+}
+
+func (v *View) SetEditable(b bool) {
+	v.Editable = b
+}
+func (v *View) IsEditable() bool {
+	return v.Editable
 }

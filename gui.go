@@ -6,7 +6,7 @@ package gocui
 
 import (
 	"errors"
-
+	"fmt"
 	"github.com/nsf/termbox-go"
 )
 
@@ -110,15 +110,13 @@ func (g *Gui) Mode(name string) (*Mode, error) {
 	return nil, ErrUnknowMode
 }
 
-// SetMode creates a new mode
+// AddMode creates a new mode
 // does nothing if there is already a mode for this name
-func (g *Gui) SetMode(name string) {
+func (g *Gui) AddMode(name string, openFunc modeHandler, closeFunc modeHandler) {
 	if _, err := g.Mode(name); err == nil {
 		return
 	}
-
-	m := CreateMode(name)
-	g.modes = append(g.modes, m)
+	g.modes = append(g.modes, CreateMode(name, openFunc, closeFunc))
 }
 
 // Close finalizes the library. It should be called after a successful
@@ -160,7 +158,7 @@ func (g *Gui) Rune(x, y int) (rune, error) {
 // be initialized. It checks if the position is valid.
 func (g *Gui) SetView(name string, x0, y0, x1, y1 int) (*View, error) {
 	if x0 >= x1 || y0 >= y1 {
-		return nil, errors.New("invalid dimensions")
+		return nil, errors.New(fmt.Sprintf("invalide dim: %d, %d %s", y1, x1, name))
 	}
 	if name == "" {
 		return nil, errors.New("invalid name")
@@ -303,7 +301,7 @@ func (g *Gui) MainLoop() error {
 		}
 	}()
 
-	inputMode := termbox.InputAlt
+	inputMode := termbox.InputEsc
 	if g.Mouse {
 		inputMode |= termbox.InputMouse
 	}
@@ -395,6 +393,11 @@ func (g *Gui) flush() error {
 					return err
 				}
 			}
+			if v.Footer != "" {
+				if err := g.drawFooter(v); err != nil {
+					return err
+				}
+			}
 		}
 
 		if err := g.draw(v); err != nil {
@@ -458,6 +461,26 @@ func (g *Gui) drawTitle(v *View) error {
 			break
 		}
 		if err := g.SetRune(x, v.y0, ch); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// drawFooter draws the footer of the view.
+func (g *Gui) drawFooter(v *View) error {
+	if v.y1 < 0 || v.y1 >= g.maxY {
+		return nil
+	}
+
+	for i, ch := range v.Footer {
+		x := v.x1 + i - 2 - len(v.Footer)
+		if x < 0 {
+			continue
+		} else if x > v.x1-2 || x >= g.maxX {
+			break
+		}
+		if err := g.SetRune(x, v.y1, ch); err != nil {
 			return err
 		}
 	}
