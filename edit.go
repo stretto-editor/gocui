@@ -42,12 +42,20 @@ func simpleEditor(v *View, key Key, ch rune, mod Modifier) {
 
 // EditWrite writes a rune at the cursor position.
 func (v *View) EditWrite(ch rune) {
+	if ch != ' ' {
+		v.Actions.Exec(NewWriteCmd(v, v.cx, v.cy, ch))
+	} else {
+		v.Actions.Exec(NewSpaceCmd(v, v.cx, v.cy))
+	}
 	v.writeRune(v.cx, v.cy, ch)
 	v.MoveCursor(1, 0, true)
 }
 
 // EditNewLine inserts a new line under the cursor.
 func (v *View) EditNewLine() {
+
+	v.Actions.Exec(NewNewLineCmd(v, v.cx, v.cy))
+
 	v.breakLine(v.cx, v.cy)
 
 	y := v.oy + v.cy
@@ -89,6 +97,10 @@ func (v *View) PermutLines(up bool) error {
 // EditDelete deletes a rune at the cursor position. back determines the
 // direction.
 func (v *View) EditDelete(back bool) {
+
+	//var fchar rune
+	//ccx, ccy := v.cx, v.cy
+
 	x, y := v.ox+v.cx, v.oy+v.cy
 	if y < 0 {
 		return
@@ -131,6 +143,8 @@ func (v *View) EditDelete(back bool) {
 			v.deleteRune(v.cx, v.cy)
 		}
 	}
+
+	//v.Actions.Exec(NewBackDeleteCmd(v, ccx, ccy, fchar))
 }
 
 // isEmpty checks if the view has no line yet

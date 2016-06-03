@@ -24,6 +24,8 @@ type View struct {
 	readOffset     int
 	readCache      string
 
+	Actions Context
+
 	tainted   bool       // marks if the viewBuffer must be updated
 	viewLines []viewLine // internal representation of the view's buffer
 
