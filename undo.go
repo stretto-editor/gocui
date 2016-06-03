@@ -24,6 +24,7 @@ type ActionsInterface interface {
 type CmdStack []Command
 
 type Context struct {
+	merge  bool
 	undoSt CmdStack
 	redoSt CmdStack
 }
@@ -43,6 +44,7 @@ type BackDeleteCmd struct {
 type NewLineCmd struct {
 	v    *View
 	x, y int
+	n    int // number of new lines
 }
 
 func (s *CmdStack) Push(c Command) {
@@ -63,17 +65,23 @@ func (s *CmdStack) Clear() {
 	*s = nil
 }
 
-func (con *Context) Exec(c Command) {
+func (con *Context) Cut() {
+	con.merge = false
+}
 
-	if _, ok := c.(Mergeable); ok {
-		if l := len(con.undoSt); l > 0 {
-			pr := con.undoSt[l-1]
-			if reflect.TypeOf(pr) == reflect.TypeOf(c) {
-				pr.(Mergeable).merge(c.(Mergeable))
-				return
+func (con *Context) Exec(c Command) {
+	if con.merge {
+		if _, ok := c.(Mergeable); ok {
+			if l := len(con.undoSt); l > 0 {
+				pr := con.undoSt[l-1]
+				if reflect.TypeOf(pr) == reflect.TypeOf(c) {
+					pr.(Mergeable).merge(c.(Mergeable))
+					return
+				}
 			}
 		}
 	}
+	con.merge = true
 	con.undoSt.Push(c)
 	con.redoSt.Clear()
 }
@@ -81,6 +89,7 @@ func (con *Context) Exec(c Command) {
 func (con *Context) Undo() {
 	if c := con.undoSt.Pop(); c != nil {
 		con.redoSt.Push(c)
+		con.merge = false
 		c.Reverse()
 	}
 }
@@ -88,6 +97,7 @@ func (con *Context) Undo() {
 func (con *Context) Redo() {
 	if c := con.redoSt.Pop(); c != nil {
 		con.undoSt.Push(c)
+		con.merge = false
 		c.Execute()
 	}
 }
@@ -101,7 +111,7 @@ func NewBackDeleteCmd(v *View, x, y int, fchar rune) *BackDeleteCmd {
 }
 
 func NewNewLineCmd(v *View, x, y int) *NewLineCmd {
-	return &NewLineCmd{v: v, x: x, y: y}
+	return &NewLineCmd{v: v, x: x, y: y, n: 1}
 }
 
 func NewSpaceCmd(v *View, x, y int) *SpaceCmd {
@@ -143,10 +153,10 @@ func (c *NewLineCmd) Reverse() {
 }
 
 func (c *SpaceCmd) Info() string {
-	return fmt.Sprintf("Space : %d times", c.n)
+	return fmt.Sprintf("%d Spaces", c.n)
 }
 func (c *NewLineCmd) Info() string {
-	return "NewLine"
+	return fmt.Sprintf("%d NewLines", c.n)
 }
 
 func (c *BackDeleteCmd) Info() string {
@@ -189,6 +199,12 @@ func (c *WriteCmd) merge(m Mergeable) {
 	}
 }
 
+func (c *NewLineCmd) merge(m Mergeable) {
+	if _, ok := m.(*NewLineCmd); ok {
+		c.n++
+	}
+}
+
 func (c *WriteCmd) Execute() {
 	c.v.SetCursor(0, 0)
 	moveTo(c.v, c.x, c.y)
@@ -210,20 +226,30 @@ func (c *WriteCmd) Info() string {
 	return "Write : " + string(c.p)
 }
 
-func (con *Context) ToString() string {
-	s := make([]byte, 1000) // todo : change the length
+func (con *Context) ToString(w int) string {
+	s := make([]byte, 2000) // todo : change the length
 	l := 0
 
 	l += copy(s[l:], "---UNDO---\n")
 
 	for _, c := range con.undoSt {
-		l += copy(s[l:], c.Info()+"\n")
+		info := c.Info()
+		if len(info) < w {
+			l += copy(s[l:], info+"\n")
+		} else {
+			l += copy(s[l:], info[:w-3]+"..."+"\n")
+		}
 	}
 
 	l += copy(s[l:], "---REDO---\n")
 
 	for i := len(con.redoSt) - 1; i >= 0; i-- {
-		l += copy(s[l:], con.redoSt[i].Info()+"\n")
+		info := con.redoSt[i].Info()
+		if len(info) < w {
+			l += copy(s[l:], info+"\n")
+		} else {
+			l += copy(s[l:], info[:w-3]+"..."+"\n")
+		}
 	}
 
 	return string(s)
@@ -259,8 +285,9 @@ func (g *Gui) UpdateHistoric() {
 
 	vm, _ = g.View("main")
 	vh, _ = g.View("historic")
+	w, _ := vh.Size()
 
 	vh.Clear()
 
-	fmt.Fprint(vh, vm.Actions.ToString())
+	fmt.Fprint(vh, vm.Actions.ToString(w))
 }
