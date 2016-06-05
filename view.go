@@ -13,6 +13,59 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
+type geom interface {
+	Size() (x, y int)
+	Name() string
+	Position() (x0, y0, x1, y1 int)
+	draw() error
+}
+
+// Container is a geometry element to create Views hierarchy
+type Container struct {
+	name           string
+	x0, y0, x1, y1 int
+	childrens      []geom
+}
+
+// newView returns a new View object.
+func newViewNode(name string, x0, y0, x1, y1 int) *Container {
+	c := &Container{
+		name: name,
+		x0:   x0,
+		y0:   y0,
+		x1:   x1,
+		y1:   y1,
+	}
+	return c
+}
+
+// Size returns the number of visible columns and rows in the container.
+func (c *Container) Size() (x, y int) {
+	return c.x1 - c.x0 - 1, c.y1 - c.y0 - 1
+}
+
+// Name returns the name of the view.s
+func (c *Container) Name() string {
+	return c.name
+}
+
+// Children returns a slice of children
+func (c *Container) children() []geom {
+	return c.childrens
+}
+
+// Position returns coordinates
+func (c *Container) Position() (int, int, int, int) {
+	return c.x0, c.y0, c.x1, c.y1
+}
+
+func (c *Container) draw() error {
+	for _, g := range c.childrens {
+		g.draw()
+	}
+	return nil
+}
+
 // A View is a window. It maintains its own internal buffer and cursor
 // position.
 type View struct {
@@ -100,6 +153,11 @@ func (v *View) Size() (x, y int) {
 // Name returns the name of the view.
 func (v *View) Name() string {
 	return v.name
+}
+
+// Position returns coordinates
+func (v *View) Position() (int, int, int, int) {
+	return v.x0, v.y0, v.x1, v.y1
 }
 
 // Size returns the number of lines contained in the buffer

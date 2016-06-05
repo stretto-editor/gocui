@@ -136,9 +136,25 @@ func (kb *keybinding) matchKeypress(key Key, ch rune, mod Modifier) bool {
 }
 
 // matchView returns if the keybinding matches the current view.
-func (kb *keybinding) matchView(v *View) bool {
-	if kb.viewName == "" {
+func (kb *keybinding) matchView(c *Container, v *View) bool {
+	if v == nil {
+		return false
+	}
+	if kb.viewName == "" || v.name == "" {
 		return true
 	}
-	return v != nil && kb.viewName == v.name
+
+	if kb.viewName == v.name {
+		return true
+	}
+
+	geo, err := v.findGeometry(c, kb.viewName)
+	if err != nil {
+		return false
+	}
+	if cont, ok := geo.(*Container); ok {
+		_, err := findView(cont, v.name)
+		return (err == nil)
+	}
+	return false
 }
