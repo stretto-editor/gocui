@@ -136,7 +136,7 @@ func (c *DelLineCmd) Execute() {
 	}
 	c.v.SetOrigin(0, 0)
 	c.v.SetCursor(0, 0)
-	c.v.MoveCursor(c.x-c.n, c.y, false)
+	c.v.MoveCursor(len(c.v.lines[c.y-c.n]), c.y-c.n, false)
 }
 
 func (c *DelLineCmd) Reverse() {
@@ -358,24 +358,51 @@ func (c *WriteCmd) merge(m Mergeable) {
 	}
 }
 
-func (con *Context) ToString(w int) string {
-	s := make([]byte, 2000) // todo : change the length
+func (con *Context) ToString(w, h int) string {
+	s := make([]byte, 2000)
 	l := 0
 
-	l += copy(s[l:], "---UNDO---\n")
-
-	for _, c := range con.undoSt {
-		info := c.Info()
+	var le int = len(con.undoSt)
+	var offs int = 0
+	if le > h/2-1 {
+		offs = le - h/2 + 1
+	} else if le < 2 {
+		for i := 0; i < h/2-1; i++ {
+			l += copy(s[l:], "\n")
+		}
+	} else {
+		for i := 0; i < h/2-le; i++ {
+			l += copy(s[l:], "\n")
+		}
+	}
+	for i := offs; i < le-1; i++ {
+		info := con.undoSt[i].Info()
 		if len(info) < w {
 			l += copy(s[l:], info+"\n")
 		} else {
 			l += copy(s[l:], info[:w-3]+"..."+"\n")
 		}
 	}
+	l += copy(s[l:], "     - UNDO -\n")
+	if le > 0 {
+		l += copy(s[l:], con.undoSt[le-1].Info()+"\n")
+	} else {
+		l += copy(s[l:], "\n")
+	}
+	l += copy(s[l:], "     - REDO -\n")
+	le = len(con.redoSt)
+	offs = 0
+	if le > 0 {
+		l += copy(s[l:], con.redoSt[le-1].Info()+"\n")
+	} else {
+		l += copy(s[l:], "\n")
+	}
+	l += copy(s[l:], "     -      -\n")
 
-	l += copy(s[l:], "---REDO---\n")
-
-	for i := len(con.redoSt) - 1; i >= 0; i-- {
+	if le > h/2-1 {
+		offs = le - h/2 + 1
+	}
+	for i := len(con.redoSt) - 2; i >= offs; i-- {
 		info := con.redoSt[i].Info()
 		if len(info) < w {
 			l += copy(s[l:], info+"\n")
@@ -417,9 +444,9 @@ func (g *Gui) UpdateHistoric() {
 
 	vm, _ = g.View("main")
 	vh, _ = g.View("historic")
-	w, _ := vh.Size()
+	w, h := vh.Size()
 
 	vh.Clear()
 
-	fmt.Fprint(vh, vm.Actions.ToString(w))
+	fmt.Fprint(vh, vm.Actions.ToString(w, h))
 }
