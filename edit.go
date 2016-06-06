@@ -42,10 +42,11 @@ func simpleEditor(v *View, key Key, ch rune, mod Modifier) {
 
 // EditWrite writes a rune at the cursor position.
 func (v *View) EditWrite(ch rune) {
+	rx, ry, _ := v.realPosition(v.cx, v.cy)
 	if ch != ' ' {
-		v.Actions.Exec(NewWriteCmd(v, v.cx, v.cy, ch))
+		v.Actions.Exec(NewWriteCmd(v, rx, ry, ch))
 	} else {
-		v.Actions.Exec(NewSpaceCmd(v, v.cx, v.cy))
+		v.Actions.Exec(NewSpaceCmd(v, rx, ry))
 	}
 	v.writeRune(v.cx, v.cy, ch)
 	v.MoveCursor(1, 0, true)
@@ -54,7 +55,8 @@ func (v *View) EditWrite(ch rune) {
 // EditNewLine inserts a new line under the cursor.
 func (v *View) EditNewLine() {
 
-	v.Actions.Exec(NewNewLineCmd(v, v.cx, v.cy))
+	rx, ry, _ := v.realPosition(v.cx, v.cy)
+	v.Actions.Exec(NewNewLineCmd(v, rx, ry))
 
 	v.breakLine(v.cx, v.cy)
 
@@ -98,9 +100,6 @@ func (v *View) PermutLines(up bool) error {
 // direction.
 func (v *View) EditDelete(back bool) {
 
-	//var fchar rune
-	//ccx, ccy := v.cx, v.cy
-
 	x, y := v.ox+v.cx, v.oy+v.cy
 	if y < 0 {
 		return
@@ -108,6 +107,8 @@ func (v *View) EditDelete(back bool) {
 		v.MoveCursor(-1, 0, true)
 		return
 	}
+
+	rx, ry, _ := v.realPosition(v.cx, v.cy)
 
 	maxX, _ := v.Size()
 	if back {
@@ -124,27 +125,30 @@ func (v *View) EditDelete(back bool) {
 			}
 
 			if v.viewLines[y].linesX == 0 { // regular line
+				v.Actions.Exec(NewDelLineCmd(v, rx, ry))
 				v.mergeLines(v.cy - 1)
 				if len(v.viewLines[y-1].line) < maxPrevWidth {
 					v.MoveCursor(-1, 0, true)
 				}
 			} else { // wrapped line
+				v.Actions.Exec(NewBackDeleteCmd(v, rx, ry, v.lines[ry][rx-1]))
 				v.deleteRune(len(v.viewLines[y-1].line)-1, v.cy-1)
 				v.MoveCursor(-1, 0, true)
 			}
 		} else { // middle/end of the line
+			v.Actions.Exec(NewBackDeleteCmd(v, rx, ry, v.lines[ry][rx-1]))
 			v.deleteRune(v.cx-1, v.cy)
 			v.MoveCursor(-1, 0, true)
 		}
 	} else {
 		if x == len(v.viewLines[y].line) { // end of the line
+			v.Actions.Exec(NewDelLineCmd(v, rx, ry))
 			v.mergeLines(v.cy)
 		} else { // start/middle of the line
+			v.Actions.Exec(NewFwdDeleteCmd(v, rx, ry, v.lines[ry][rx]))
 			v.deleteRune(v.cx, v.cy)
 		}
 	}
-
-	//v.Actions.Exec(NewBackDeleteCmd(v, ccx, ccy, fchar))
 }
 
 // isEmpty checks if the view has no line yet
