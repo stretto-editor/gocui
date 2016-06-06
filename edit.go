@@ -176,7 +176,7 @@ func (v *View) lastValidateLineInView() bool {
 	return v.cy+1 == len(v.viewLines)
 }
 
-// adjustPositionToCurrentString move the cursor and the origin af the view given
+// adjustPositionToCurrentString move the cursor and the origin of the view given
 // the length of the string to suit to.
 func (v *View) adjustPositionToCurrentString() {
 	vx := v.ox + v.cx
@@ -258,7 +258,7 @@ func (v *View) moveOneRuneForward(writeMode bool) {
 	}
 }
 
-// moveOneRuneForward will move the cursor one character backward and adjust the
+// moveOneRuneBackward will move the cursor one character backward and adjust the
 // origin of the view if necessary
 func (v *View) moveOneRuneBackward() {
 	if v.firstLine() && v.bol() {
@@ -327,7 +327,9 @@ func (v *View) MoveCursor(dx, dy int, writeMode bool) {
 			v.moveOneLineLower(writeMode)
 		}
 	}
-	v.adjustPositionToCurrentString()
+	if !writeMode {
+		v.adjustPositionToCurrentString()
+	}
 
 	// Run through columns
 	if dx < 0 {
