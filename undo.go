@@ -385,7 +385,12 @@ func (con *Context) ToString(w, h int) string {
 	}
 	l += copy(s[l:], "     - UNDO -\n")
 	if le > 0 {
-		l += copy(s[l:], con.undoSt[le-1].Info()+"\n")
+		info := con.undoSt[le-1].Info()
+		if len(info) < w {
+			l += copy(s[l:], info+"\n")
+		} else {
+			l += copy(s[l:], info[:w-3]+"..."+"\n")
+		}
 	} else {
 		l += copy(s[l:], "\n")
 	}
@@ -393,7 +398,12 @@ func (con *Context) ToString(w, h int) string {
 	le = len(con.redoSt)
 	offs = 0
 	if le > 0 {
-		l += copy(s[l:], con.redoSt[le-1].Info()+"\n")
+		info := con.redoSt[le-1].Info()
+		if len(info) < w {
+			l += copy(s[l:], info+"\n")
+		} else {
+			l += copy(s[l:], info[:w-3]+"..."+"\n")
+		}
 	} else {
 		l += copy(s[l:], "\n")
 	}
