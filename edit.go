@@ -173,7 +173,7 @@ func (v *View) lastBufferLine() bool {
 // does not use all the view, this corresponds to check if the cursor is placed
 // in the last line representing the file
 func (v *View) lastValidateLineInView() bool {
-	return v.cy+1 == len(v.viewLines)
+	return v.cy == len(v.viewLines)
 }
 
 // adjustPositionToCurrentString move the cursor and the origin of the view given
@@ -268,7 +268,9 @@ func (v *View) moveOneRuneBackward() {
 		if v.firstBufferLine() {
 			v.oy--
 		}
-		v.cy--
+		if v.cy != 0 {
+			v.cy--
+		}
 
 		vline := v.viewLines[v.oy+v.cy]
 		len := len(vline.line)
@@ -306,7 +308,7 @@ func (v *View) moveOneLineLower(writeMode bool) {
 		return
 	}
 	if v.lastValidateLineInView() && writeMode {
-		v.cy++
+		v.oy++
 	} else if v.lastBufferLine() {
 		v.oy++
 	} else {
