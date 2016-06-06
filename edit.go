@@ -61,6 +61,31 @@ func (v *View) EditNewLine() {
 	}
 }
 
+// PermutLines permuts the line at cursor
+// position with the upper or the lower line
+func (v *View) PermutLines(up bool) error {
+	_, ry, _ := v.realPosition(v.Cursor())
+
+	if up {
+		if ry < 1 {
+			return nil
+		}
+		s := v.lines[ry]
+		v.lines[ry] = v.lines[ry-1]
+		v.lines[ry-1] = s
+		v.MoveCursor(0, -1, false)
+	} else {
+		if ry+1 == len(v.lines) {
+			return nil
+		}
+		s := v.lines[ry]
+		v.lines[ry] = v.lines[ry+1]
+		v.lines[ry+1] = s
+		v.MoveCursor(0, 1, false)
+	}
+	return nil
+}
+
 // EditDelete deletes a rune at the cursor position. back determines the
 // direction.
 func (v *View) EditDelete(back bool) {
