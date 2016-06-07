@@ -117,8 +117,14 @@ func (v *View) EditDelete(back bool) {
 			}
 
 			if v.viewLines[y].linesX == 0 { // regular line
-				v.Actions.Exec(NewDelLineCmd(v, rx, ry))
-				v.mergeLines(v.cy - 1)
+				px, py := 0, 0
+				if ry > 0 {
+					py = ry - 1
+					px = len(v.lines[py])
+				}
+				if err := v.mergeLines(v.cy - 1); err == nil {
+					v.Actions.Exec(NewBackDelLineCmd(v, px, py))
+				}
 				if len(v.viewLines[y-1].line) < maxPrevWidth {
 					v.MoveCursor(-1, 0, true)
 				}
@@ -134,8 +140,9 @@ func (v *View) EditDelete(back bool) {
 		}
 	} else {
 		if x == len(v.viewLines[y].line) { // end of the line
-			v.Actions.Exec(NewDelLineCmd(v, rx, ry))
-			v.mergeLines(v.cy)
+			if err := v.mergeLines(v.cy); err == nil {
+				v.Actions.Exec(NewFwdDelLineCmd(v, rx, ry))
+			}
 		} else { // start/middle of the line
 			v.Actions.Exec(NewFwdDeleteCmd(v, rx, ry, v.lines[ry][rx]))
 			v.deleteRune(v.cx, v.cy)

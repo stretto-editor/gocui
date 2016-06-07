@@ -155,42 +155,85 @@ func (c *PermutCmd) merge(m Mergeable) {
 	}
 }
 
-// ---------------------- DELLINE CMD ------------------------- //
+// ---------------------- FWDDELLINE CMD ------------------------- //
 
-type DelLineCmd struct {
+type FwdDelLineCmd struct {
 	v    *View
 	x, y int
 	n    int
 }
 
-func NewDelLineCmd(v *View, x, y int) *DelLineCmd {
-	return &DelLineCmd{v: v, x: x, y: y, n: 1}
+func NewFwdDelLineCmd(v *View, x, y int) *FwdDelLineCmd {
+	return &FwdDelLineCmd{v: v, x: x, y: y, n: 1}
 }
 
-func (c *DelLineCmd) Execute() {
+func (c *FwdDelLineCmd) Execute() {
 	for i := 0; i < c.n; i++ {
-		c.v.properMergeLines(c.y - 1)
+		c.v.properMergeLines(c.y)
 	}
 	c.v.SetOrigin(0, 0)
 	c.v.SetCursor(0, 0)
-	c.v.MoveCursor(len(c.v.lines[c.y-c.n]), c.y-c.n, false)
+	c.v.MoveCursor(c.x, c.y, false)
 }
 
-func (c *DelLineCmd) Reverse() {
+func (c *FwdDelLineCmd) Reverse() {
 	for i := 0; i < c.n; i++ {
-		c.v.properBreakLine(0, c.y-c.n+1)
+		c.v.properBreakLine(c.x, c.y)
 	}
 	c.v.SetOrigin(0, 0)
 	c.v.SetCursor(0, 0)
-	c.v.MoveCursor(0, c.y, false)
+	c.v.MoveCursor(c.x, c.y, false)
 }
 
-func (c *DelLineCmd) Info() string {
+func (c *FwdDelLineCmd) Info() string {
+	return fmt.Sprintf("%d FwdDelLine(s)", c.n)
+}
+
+func (c *FwdDelLineCmd) merge(m Mergeable) {
+	if _, ok := m.(*FwdDelLineCmd); ok {
+		c.n++
+	}
+}
+
+// ---------------------- BACKDELLINE CMD ------------------------- //
+
+type BackDelLineCmd struct {
+	v    *View
+	x, y int
+	n    int
+}
+
+func NewBackDelLineCmd(v *View, x, y int) *BackDelLineCmd {
+	return &BackDelLineCmd{v: v, x: x, y: y, n: 1}
+}
+
+func (c *BackDelLineCmd) Execute() {
+	for i := 0; i < c.n; i++ {
+		c.v.properMergeLines(c.y)
+	}
+	c.v.SetOrigin(0, 0)
+	c.v.SetCursor(0, 0)
+	c.v.MoveCursor(c.x, c.y, false)
+}
+
+func (c *BackDelLineCmd) Reverse() {
+	c.v.properBreakLine(c.x, c.y)
+	for i := 1; i < c.n; i++ {
+		c.v.properBreakLine(0, c.y+i)
+	}
+	c.v.SetOrigin(0, 0)
+	c.v.SetCursor(0, 0)
+	c.v.MoveCursor(0, c.y+c.n, false)
+}
+
+func (c *BackDelLineCmd) Info() string {
 	return fmt.Sprintf("%d DelLine(s)", c.n)
 }
 
-func (c *DelLineCmd) merge(m Mergeable) {
-	if _, ok := m.(*DelLineCmd); ok {
+func (c *BackDelLineCmd) merge(m Mergeable) {
+	if o, ok := m.(*BackDelLineCmd); ok {
+		c.y = o.y
+		c.x = o.x
 		c.n++
 	}
 }

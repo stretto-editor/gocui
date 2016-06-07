@@ -473,8 +473,9 @@ func (v *View) mergeLines(y int) error {
 	if y < len(v.lines)-1 { // otherwise we don't need to merge anything
 		v.lines[y] = append(v.lines[y], v.lines[y+1]...)
 		v.lines = append(v.lines[:y+1], v.lines[y+2:]...)
+		return nil
 	}
-	return nil
+	return errors.New("last line")
 }
 
 func (v *View) properBreakLine(x, y int) error {
