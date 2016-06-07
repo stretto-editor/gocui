@@ -223,7 +223,7 @@ func (c *BackDelLineCmd) Reverse() {
 	}
 	c.v.SetOrigin(0, 0)
 	c.v.SetCursor(0, 0)
-	c.v.MoveCursor(0, c.y+c.n, false)
+	c.v.MoveCursor(c.x+c.n, c.y, false)
 }
 
 func (c *BackDelLineCmd) Info() string {
@@ -336,7 +336,7 @@ func (c *NewLineCmd) Execute() {
 	}
 	c.v.SetOrigin(0, 0)
 	c.v.SetCursor(0, 0)
-	c.v.MoveCursor(c.x+c.n, c.y, false) // should work with c.v.MoveCursor(c.x+c.n, c.y, false)
+	c.v.MoveCursor(c.x+c.n, c.y, false)
 }
 
 func (c *NewLineCmd) Reverse() {
