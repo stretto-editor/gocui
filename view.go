@@ -609,3 +609,16 @@ func (v *View) SetEditable(b bool) {
 func (v *View) IsEditable() bool {
 	return v.Editable
 }
+
+// permutLines permuts y1 and y2
+func (v *View) permutLines(y1, y2 int) error {
+	if y1 < 0 || y2 < 0 || y1 >= len(v.lines) || y2 >= len(v.lines) {
+		return errors.New("invalid line")
+	}
+
+	s := v.lines[y1]
+	v.lines[y1] = v.lines[y2]
+	v.lines[y2] = s
+
+	return nil
+}

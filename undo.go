@@ -118,6 +118,43 @@ func (c *PasteCmd) merge(m Mergeable) {
 	}
 }
 */
+
+// ---------------------- PERMUT CMD ------------------------- //
+
+type PermutCmd struct {
+	v    *View
+	x, y int
+	n    int
+}
+
+func NewPermutCmd(v *View, x, y int, n int) *PermutCmd {
+	return &PermutCmd{v: v, x: x, y: y, n: n}
+}
+
+func (c *PermutCmd) Execute() {
+	c.v.permutLines(c.y, c.y+c.n)
+	c.v.SetOrigin(0, 0)
+	c.v.SetCursor(0, 0)
+	c.v.MoveCursor(c.x, c.y+c.n, false)
+}
+
+func (c *PermutCmd) Reverse() {
+	c.v.permutLines(c.y, c.y+c.n)
+	c.v.SetOrigin(0, 0)
+	c.v.SetCursor(0, 0)
+	c.v.MoveCursor(c.x, c.y, false)
+}
+
+func (c *PermutCmd) Info() string {
+	return "PermutLines"
+}
+
+func (c *PermutCmd) merge(m Mergeable) {
+	if o, ok := m.(*PermutCmd); ok {
+		c.n += o.n
+	}
+}
+
 // ---------------------- DELLINE CMD ------------------------- //
 
 type DelLineCmd struct {
