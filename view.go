@@ -66,6 +66,43 @@ func (c *Container) draw() error {
 	return nil
 }
 
+// RoundRobinForward takes the last element in c.childrens and put it
+// at the beginning of the same slice
+func (c *Container) RoundRobinForward() *View {
+	if len(c.childrens) <= 1 {
+		return nil
+	}
+	c.childrens = append(c.childrens[1:], c.childrens[0])
+	if v, ok := c.childrens[len(c.childrens)-1].(*View); ok {
+		return v
+	}
+	return nil
+}
+
+// RoundRobinBackward takes the first element in c.childrens and put it
+// at the end of the same slice
+func (c *Container) RoundRobinBackward() *View {
+	if len(c.childrens) <= 1 {
+		return nil
+	}
+	c.childrens = append(c.childrens[len(c.childrens)-1:len(c.childrens)], c.childrens[:len(c.childrens)-1]...)
+	return c.LastView()
+}
+
+// HasNoChildren checks the length of childrens
+func (c *Container) HasNoChildren() bool {
+	return len(c.childrens) == 0
+}
+
+func (c *Container) LastView() *View {
+	for i := len(c.childrens) - 1; i >= 0; i-- {
+		if v, ok := c.childrens[i].(*View); ok {
+			return v
+		}
+	}
+	return nil
+}
+
 // A View is a window. It maintains its own internal buffer and cursor
 // position.
 type View struct {

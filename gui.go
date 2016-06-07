@@ -44,6 +44,9 @@ type Gui struct {
 	currentMode *Mode
 	maxX, maxY  int
 
+	// workingView represents the view related to a file to work on
+	workingView *View
+
 	// BgColor and FgColor allow to configure the background and foreground
 	// colors of the GUI.
 	BgColor, FgColor Attribute
@@ -380,6 +383,21 @@ func (g *Gui) SetCurrentView(name string) error {
 // owns the focus.
 func (g *Gui) CurrentView() *View {
 	return g.currentView
+}
+
+// Workingview returns the currently working view, or nil if no view
+// owns the focus.
+func (g *Gui) Workingview() *View {
+	return g.workingView
+}
+
+// SetWorkingView gives the focus to a given view.
+func (g *Gui) SetWorkingView(name string) error {
+	if v, err := g.View(name); err == nil {
+		g.workingView = v
+		return nil
+	}
+	return ErrUnknownView
 }
 
 // SetKeybinding creates a new keybinding. If viewname equals to ""
