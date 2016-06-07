@@ -7,6 +7,7 @@ package gocui
 import (
 	"errors"
 	"fmt"
+
 	"github.com/nsf/termbox-go"
 )
 
@@ -24,6 +25,8 @@ var (
 
 	// ErrUnknownView allows to assert if a View must be initialized.
 	ErrUnknownView = errors.New("unknown view")
+	// ErrUnknownViewNode allows to assert if a View must be initialized.
+	ErrUnknownViewNode = errors.New("unknown view node")
 
 	// ErrUnknowMode checks map initialization
 	ErrUnknowMode = errors.New("unknown mode")
@@ -34,12 +37,15 @@ var (
 type Gui struct {
 	tbEvents    chan termbox.Event
 	userEvents  chan userEvent
-	views       []*View
+	viewTree    *Container
 	currentView *View
 	layout      Handler
 	modes       []*Mode
 	currentMode *Mode
 	maxX, maxY  int
+
+	// workingView represents the view related to a file to work on
+	workingView *View
 
 	// BgColor and FgColor allow to configure the background and foreground
 	// colors of the GUI.
@@ -78,6 +84,10 @@ func (g *Gui) Init() error {
 	g.BgColor = ColorBlack
 	g.FgColor = ColorWhite
 	g.Editor = DefaultEditor
+
+	g.currentView = nil
+	tree := Container{name: ""}
+	g.viewTree = &tree
 
 	return nil
 }
@@ -156,9 +166,9 @@ func (g *Gui) Rune(x, y int) (rune, error) {
 // already exists, its dimensions are updated; otherwise, the error
 // ErrUnknownView is returned, which allows to assert if the View must
 // be initialized. It checks if the position is valid.
-func (g *Gui) SetView(name string, x0, y0, x1, y1 int) (*View, error) {
+func (g *Gui) SetView(name string, father string, x0, y0, x1, y1 int) (*View, error) {
 	if x0 >= x1 || y0 >= y1 {
-		return nil, errors.New(fmt.Sprintf("invalide dim: %d, %d %s", y1, x1, name))
+		return nil, fmt.Errorf("invalide dim: %d, %d %s", y1, x1, name)
 	}
 	if name == "" {
 		return nil, errors.New("invalid name")
@@ -176,17 +186,64 @@ func (g *Gui) SetView(name string, x0, y0, x1, y1 int) (*View, error) {
 	v := newView(name, x0, y0, x1, y1)
 	v.BgColor, v.FgColor = g.BgColor, g.FgColor
 	v.SelBgColor, v.SelFgColor = g.SelBgColor, g.SelFgColor
-	g.views = append(g.views, v)
+	c, err := g.ViewNode(father)
+	if c == nil && err != ErrUnknownViewNode {
+		return nil, err
+	}
+	c.childrens = append(c.childrens, v)
 	return v, ErrUnknownView
+}
+
+// SetViewNode creates a new view with its top-left corner at (x0, y0)
+// and the bottom-right one at (x1, y1). If a viewNode with the same name
+// already exists, its dimensions are updated; otherwise, the error
+// ErrUnknownViewNode is returned. It checks if the position is valid.
+func (g *Gui) SetViewNode(name string, father string, x0, y0, x1, y1 int) error {
+	if x0 >= x1 || y0 >= y1 {
+		return fmt.Errorf("invalide dim: %d, %d %s", y1, x1, name)
+	}
+	if name == "" {
+		return errors.New("invalid name")
+	}
+
+	if vn, err := g.ViewNode(name); err == nil {
+		vn.x0 = x0
+		vn.y0 = y0
+		vn.x1 = x1
+		vn.y1 = y1
+		return nil
+	}
+
+	c := newViewNode(name, x0, y0, x1, y1)
+	cfather, err := g.ViewNode(father)
+	if c != nil && err != nil {
+		return err
+	}
+	cfather.childrens = append(cfather.childrens, c)
+	return ErrUnknownViewNode
 }
 
 // SetViewOnTop sets the given view on top of the existing ones.
 func (g *Gui) SetViewOnTop(name string) (*View, error) {
-	for i, v := range g.views {
-		if v.name == name {
-			s := append(g.views[:i], g.views[i+1:]...)
-			g.views = append(s, v)
+	if v, err := permuteGeom(g.viewTree, name); v != nil && err != ErrUnknownView {
+		return v, err
+	}
+	return nil, ErrUnknownView
+}
+
+func permuteGeom(c *Container, name string) (*View, error) {
+	for i, node := range c.childrens {
+		if v, ok := node.(*View); ok && v.Name() == name {
+			s := append(c.childrens[:i], c.childrens[i+1:]...)
+			c.childrens = append(s, v)
 			return v, nil
+		} else if n, ok := node.(*Container); ok {
+			v, err := permuteGeom(n, name)
+			if v != nil && err != ErrUnknownView {
+				s := append(c.childrens[:i], c.childrens[i+1:]...)
+				c.childrens = append(s, n)
+				return v, err
+			}
 		}
 	}
 	return nil, ErrUnknownView
@@ -195,9 +252,55 @@ func (g *Gui) SetViewOnTop(name string) (*View, error) {
 // View returns a pointer to the view with the given name, or error
 // ErrUnknownView if a view with that name does not exist.
 func (g *Gui) View(name string) (*View, error) {
-	for _, v := range g.views {
-		if v.name == name {
+	return findView(g.viewTree, name)
+}
+
+func findView(c *Container, name string) (*View, error) {
+	for _, node := range c.childrens {
+		if v, ok := node.(*View); ok && v.Name() == name {
 			return v, nil
+		} else if cont, ok := node.(*Container); ok {
+			v, err := findView(cont, name)
+			if v != nil && err != ErrUnknownView {
+				return v, err
+			}
+		}
+	}
+	return nil, ErrUnknownView
+}
+
+// ViewNode returns a pointer to the view with the given name, or error
+// ErrUnknownView if a view with that name does not exist.
+func (g *Gui) ViewNode(name string) (*Container, error) {
+	return findViewNode(g.viewTree, name)
+}
+func findViewNode(c *Container, name string) (*Container, error) {
+	if c.Name() == name {
+		return c, nil
+	}
+	for _, node := range c.childrens {
+		if cont, ok := node.(*Container); ok {
+			result, err := findViewNode(cont, name)
+			if result != nil && err != ErrUnknownViewNode {
+				return result, err
+			}
+		}
+	}
+	return nil, ErrUnknownViewNode
+}
+
+func (v *View) findGeometry(c *Container, name string) (geom, error) {
+	if c.Name() == name {
+		return c, nil
+	}
+	for _, node := range c.childrens {
+		if v, ok := node.(*View); ok && v.Name() == name {
+			return v, nil
+		} else if cont, ok := node.(*Container); ok {
+			result, err := findViewNode(cont, name)
+			if result != nil {
+				return result, err
+			}
 		}
 	}
 	return nil, ErrUnknownView
@@ -206,9 +309,20 @@ func (g *Gui) View(name string) (*View, error) {
 // ViewByPosition returns a pointer to a view matching the given position, or
 // error ErrUnknownView if a view in that position does not exist.
 func (g *Gui) ViewByPosition(x, y int) (*View, error) {
-	for _, v := range g.views {
-		if x > v.x0 && x < v.x1 && y > v.y0 && y < v.y1 {
+	if v, err := findViewByPosition(g.viewTree, x, y); v != nil && err == nil {
+		return v, err
+	}
+	return nil, ErrUnknownView
+}
+func findViewByPosition(c *Container, x, y int) (*View, error) {
+	for _, node := range c.childrens {
+		if v, ok := node.(*View); ok && x > v.x0 && x < v.x1 && y > v.y0 && y < v.y1 {
 			return v, nil
+		} else if cont, ok := node.(*Container); ok {
+			result, err := findViewByPosition(cont, x, y)
+			if result != nil && err != ErrUnknownView {
+				return result, err
+			}
 		}
 	}
 	return nil, ErrUnknownView
@@ -217,9 +331,20 @@ func (g *Gui) ViewByPosition(x, y int) (*View, error) {
 // ViewPosition returns the coordinates of the view with the given name, or
 // error ErrUnknownView if a view with that name does not exist.
 func (g *Gui) ViewPosition(name string) (x0, y0, x1, y1 int, err error) {
-	for _, v := range g.views {
-		if v.name == name {
+	if x0, y0, x1, y1, err := findViewPosition(g.viewTree, name); err == nil {
+		return x0, y0, x1, y1, err
+	}
+	return 0, 0, 0, 0, ErrUnknownView
+}
+func findViewPosition(c *Container, name string) (x0, y0, x1, y1 int, err error) {
+	for _, node := range c.childrens {
+		if v, ok := node.(*View); ok && node.Name() == name {
 			return v.x0, v.y0, v.x1, v.y1, nil
+		} else if cont, ok := node.(*Container); ok {
+			x0, y0, x1, y1, err := findViewPosition(cont, name)
+			if err == nil {
+				return x0, y0, x1, y1, err
+			}
 		}
 	}
 	return 0, 0, 0, 0, ErrUnknownView
@@ -227,10 +352,19 @@ func (g *Gui) ViewPosition(name string) (x0, y0, x1, y1 int, err error) {
 
 // DeleteView deletes a view by name.
 func (g *Gui) DeleteView(name string) error {
-	for i, v := range g.views {
-		if v.name == name {
-			g.views = append(g.views[:i], g.views[i+1:]...)
+	return deleteViewRecursive(g.viewTree, name)
+}
+
+func deleteViewRecursive(c *Container, name string) error {
+	for i, node := range c.childrens {
+		if _, ok := node.(*View); ok && node.Name() == name {
+			c.childrens = append(c.childrens[:i], c.childrens[i+1:]...)
 			return nil
+		} else if cont, ok := node.(*Container); ok {
+			err := deleteViewRecursive(cont, name)
+			if err == nil {
+				return nil
+			}
 		}
 	}
 	return ErrUnknownView
@@ -238,11 +372,9 @@ func (g *Gui) DeleteView(name string) error {
 
 // SetCurrentView gives the focus to a given view.
 func (g *Gui) SetCurrentView(name string) error {
-	for _, v := range g.views {
-		if v.name == name {
-			g.currentView = v
-			return nil
-		}
+	if v, err := g.View(name); err == nil {
+		g.currentView = v
+		return nil
 	}
 	return ErrUnknownView
 }
@@ -251,6 +383,21 @@ func (g *Gui) SetCurrentView(name string) error {
 // owns the focus.
 func (g *Gui) CurrentView() *View {
 	return g.currentView
+}
+
+// Workingview returns the currently working view, or nil if no view
+// owns the focus.
+func (g *Gui) Workingview() *View {
+	return g.workingView
+}
+
+// SetWorkingView gives the focus to a given view.
+func (g *Gui) SetWorkingView(name string) error {
+	if v, err := g.View(name); err == nil {
+		g.workingView = v
+		return nil
+	}
+	return ErrUnknownView
 }
 
 // SetKeybinding creates a new keybinding. If viewname equals to ""
@@ -287,8 +434,6 @@ func (g *Gui) Execute(h Handler) {
 // the base views and its initializations.
 func (g *Gui) SetLayout(layout Handler) {
 	g.layout = layout
-	g.currentView = nil
-	g.views = nil
 	go func() { g.tbEvents <- termbox.Event{Type: termbox.EventResize} }()
 }
 
@@ -374,42 +519,61 @@ func (g *Gui) flush() error {
 	maxX, maxY := termbox.Size()
 	// if GUI's size has changed, we need to redraw all views
 	if maxX != g.maxX || maxY != g.maxY {
-		for _, v := range g.views {
-			v.tainted = true
-		}
+		updateViews(g.viewTree)
 	}
 	g.maxX, g.maxY = maxX, maxY
 
 	if err := g.layout(g); err != nil {
 		return err
 	}
-	for _, v := range g.views {
-		if v.Frame {
-			if err := g.drawFrame(v); err != nil {
-				return err
-			}
-			if v.Title != "" {
-				if err := g.drawTitle(v); err != nil {
-					return err
-				}
-			}
-			if v.Footer != "" {
-				if err := g.drawFooter(v); err != nil {
-					return err
-				}
-			}
-		}
+	g.displayViews(g.viewTree)
 
-		if err := g.draw(v); err != nil {
-			return err
-		}
-	}
 	if err := g.drawIntersections(); err != nil {
 		return err
 	}
 	termbox.Flush()
 	return nil
+}
 
+func updateViews(c *Container) {
+	for _, node := range c.childrens {
+		if v, ok := node.(*View); ok {
+			v.tainted = true
+		} else if cont, ok := node.(*Container); ok {
+			updateViews(cont)
+		}
+	}
+}
+
+func (g *Gui) displayViews(c *Container) error {
+	for _, node := range c.childrens {
+		if v, ok := node.(*View); ok {
+			if v.Frame {
+				if err := g.drawFrame(v); err != nil {
+					return err
+				}
+				if v.Title != "" {
+					if err := g.drawTitle(v); err != nil {
+						return err
+					}
+				}
+				if v.Footer != "" {
+					if err := g.drawFooter(v); err != nil {
+						return err
+					}
+				}
+			}
+
+			if err := g.draw(v); err != nil {
+				return err
+			}
+		} else if cont, ok := node.(*Container); ok {
+			if err := g.displayViews(cont); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // drawFrame draws the horizontal and vertical edges of a view.
@@ -488,7 +652,7 @@ func (g *Gui) drawFooter(v *View) error {
 }
 
 // draw manages the cursor and calls the draw function of a view.
-func (g *Gui) draw(v *View) error {
+func (g *Gui) draw(v geom) error {
 	if g.Cursor {
 		if v := g.currentView; v != nil {
 			vMaxX, vMaxY := v.Size()
@@ -515,7 +679,9 @@ func (g *Gui) draw(v *View) error {
 		termbox.HideCursor()
 	}
 
-	v.clearRunes()
+	if a, ok := v.(*View); ok {
+		a.clearRunes()
+	}
 	if err := v.draw(); err != nil {
 		return err
 	}
@@ -525,24 +691,35 @@ func (g *Gui) draw(v *View) error {
 // drawIntersections draws the corners of each view, based on the type
 // of the edges that converge at these points.
 func (g *Gui) drawIntersections() error {
-	for _, v := range g.views {
-		if ch, ok := g.intersectionRune(v.x0, v.y0); ok {
-			if err := g.SetRune(v.x0, v.y0, ch); err != nil {
-				return err
+	return g.drawIntersectionsRecursively(g.viewTree)
+}
+
+func (g *Gui) drawIntersectionsRecursively(c *Container) error {
+	for _, node := range c.childrens {
+		if v, ok := node.(*View); ok {
+			if ch, ok := g.intersectionRune(v.x0, v.y0); ok {
+				if err := g.SetRune(v.x0, v.y0, ch); err != nil {
+					return err
+				}
 			}
-		}
-		if ch, ok := g.intersectionRune(v.x0, v.y1); ok {
-			if err := g.SetRune(v.x0, v.y1, ch); err != nil {
-				return err
+			if ch, ok := g.intersectionRune(v.x0, v.y1); ok {
+				if err := g.SetRune(v.x0, v.y1, ch); err != nil {
+					return err
+				}
 			}
-		}
-		if ch, ok := g.intersectionRune(v.x1, v.y0); ok {
-			if err := g.SetRune(v.x1, v.y0, ch); err != nil {
-				return err
+			if ch, ok := g.intersectionRune(v.x1, v.y0); ok {
+				if err := g.SetRune(v.x1, v.y0, ch); err != nil {
+					return err
+				}
 			}
-		}
-		if ch, ok := g.intersectionRune(v.x1, v.y1); ok {
-			if err := g.SetRune(v.x1, v.y1, ch); err != nil {
+			if ch, ok := g.intersectionRune(v.x1, v.y1); ok {
+				if err := g.SetRune(v.x1, v.y1, ch); err != nil {
+					return err
+				}
+			}
+		} else if cont, ok := node.(*Container); ok {
+			err := g.drawIntersectionsRecursively(cont)
+			if err != nil {
 				return err
 			}
 		}
@@ -636,7 +813,7 @@ func (g *Gui) onKey(ev *termbox.Event) error {
 		if kb.h == nil {
 			continue
 		}
-		if kb.matchKeypress(Key(ev.Key), ev.Ch, Modifier(ev.Mod)) && kb.matchView(curView) {
+		if kb.matchKeypress(Key(ev.Key), ev.Ch, Modifier(ev.Mod)) && kb.matchView(g.viewTree, curView) {
 			if err := kb.h(g, curView); err != nil {
 				return err
 			}
