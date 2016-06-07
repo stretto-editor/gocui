@@ -73,7 +73,7 @@ func (v *View) PermutLines(up bool) error {
 		s := v.lines[ry]
 		v.lines[ry] = v.lines[ry-1]
 		v.lines[ry-1] = s
-		v.MoveCursor(0, -1, false)
+		v.MoveCursor(0, -1, true)
 	} else {
 		if ry+1 == len(v.lines) {
 			return nil
@@ -81,7 +81,7 @@ func (v *View) PermutLines(up bool) error {
 		s := v.lines[ry]
 		v.lines[ry] = v.lines[ry+1]
 		v.lines[ry+1] = s
-		v.MoveCursor(0, 1, false)
+		v.MoveCursor(0, 1, true)
 	}
 	return nil
 }
