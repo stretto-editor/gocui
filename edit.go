@@ -42,12 +42,22 @@ func simpleEditor(v *View, key Key, ch rune, mod Modifier) {
 
 // EditWrite writes a rune at the cursor position.
 func (v *View) EditWrite(ch rune) {
+	rx, ry, _ := v.realPosition(v.cx, v.cy)
+	if ch != ' ' {
+		v.Actions.Exec(NewWriteCmd(v, rx, ry, ch))
+	} else {
+		v.Actions.Exec(NewSpaceCmd(v, rx, ry))
+	}
 	v.writeRune(v.cx, v.cy, ch)
 	v.MoveCursor(1, 0, true)
 }
 
 // EditNewLine inserts a new line under the cursor.
 func (v *View) EditNewLine() {
+
+	rx, ry, _ := v.realPosition(v.cx, v.cy)
+	v.Actions.Exec(NewNewLineCmd(v, rx, ry))
+
 	v.breakLine(v.cx, v.cy)
 
 	y := v.oy + v.cy
@@ -61,34 +71,27 @@ func (v *View) EditNewLine() {
 	}
 }
 
-// PermutLines permuts the line at cursor
-// position with the upper or the lower line
-func (v *View) PermutLines(up bool) error {
-	_, ry, _ := v.realPosition(v.Cursor())
-
+// EditPermutLines permuts the line at the cursor position
+// with the upper or the lower one, given the boolean value
+func (v *View) EditPermutLines(up bool) {
+	rx, ry, _ := v.realPosition(v.Cursor())
 	if up {
-		if ry < 1 {
-			return nil
+		if err := v.permutLines(ry-1, ry); err == nil {
+			v.MoveCursor(0, -1, true)
+			v.Actions.Exec(NewPermutCmd(v, rx, ry, -1))
 		}
-		s := v.lines[ry]
-		v.lines[ry] = v.lines[ry-1]
-		v.lines[ry-1] = s
-		v.MoveCursor(0, -1, true)
 	} else {
-		if ry+1 == len(v.lines) {
-			return nil
+		if err := v.permutLines(ry+1, ry); err == nil {
+			v.MoveCursor(0, 1, true)
+			v.Actions.Exec(NewPermutCmd(v, rx, ry, +1))
 		}
-		s := v.lines[ry]
-		v.lines[ry] = v.lines[ry+1]
-		v.lines[ry+1] = s
-		v.MoveCursor(0, 1, true)
 	}
-	return nil
 }
 
 // EditDelete deletes a rune at the cursor position. back determines the
 // direction.
 func (v *View) EditDelete(back bool) {
+
 	x, y := v.ox+v.cx, v.oy+v.cy
 	if y < 0 {
 		return
@@ -96,6 +99,8 @@ func (v *View) EditDelete(back bool) {
 		v.MoveCursor(-1, 0, true)
 		return
 	}
+
+	rx, ry, _ := v.realPosition(v.cx, v.cy)
 
 	maxX, _ := v.Size()
 	if back {
@@ -112,22 +117,34 @@ func (v *View) EditDelete(back bool) {
 			}
 
 			if v.viewLines[y].linesX == 0 { // regular line
-				v.mergeLines(v.cy - 1)
+				px, py := 0, 0
+				if ry > 0 {
+					py = ry - 1
+					px = len(v.lines[py])
+				}
+				if err := v.mergeLines(v.cy - 1); err == nil {
+					v.Actions.Exec(NewBackDelLineCmd(v, px, py))
+				}
 				if len(v.viewLines[y-1].line) < maxPrevWidth {
 					v.MoveCursor(-1, 0, true)
 				}
 			} else { // wrapped line
+				v.Actions.Exec(NewBackDeleteCmd(v, rx, ry, v.lines[ry][rx-1]))
 				v.deleteRune(len(v.viewLines[y-1].line)-1, v.cy-1)
 				v.MoveCursor(-1, 0, true)
 			}
 		} else { // middle/end of the line
+			v.Actions.Exec(NewBackDeleteCmd(v, rx, ry, v.lines[ry][rx-1]))
 			v.deleteRune(v.cx-1, v.cy)
 			v.MoveCursor(-1, 0, true)
 		}
 	} else {
 		if x == len(v.viewLines[y].line) { // end of the line
-			v.mergeLines(v.cy)
+			if err := v.mergeLines(v.cy); err == nil {
+				v.Actions.Exec(NewFwdDelLineCmd(v, rx, ry))
+			}
 		} else { // start/middle of the line
+			v.Actions.Exec(NewFwdDeleteCmd(v, rx, ry, v.lines[ry][rx]))
 			v.deleteRune(v.cx, v.cy)
 		}
 	}

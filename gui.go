@@ -642,5 +642,7 @@ func (g *Gui) onKey(ev *termbox.Event) error {
 			}
 		}
 	}
+
+	g.UpdateHistoric()
 	return nil
 }
