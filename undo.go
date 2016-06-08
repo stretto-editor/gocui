@@ -178,7 +178,7 @@ func (g *Gui) UpdateHistoric() {
 	// this should be in stretto
 	var vm, vh *View
 
-	vm = g.Workingview()
+	vm = g.CurrentView()
 	vh, _ = g.View("historic")
 	w, h := vh.Size()
 
