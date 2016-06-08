@@ -451,7 +451,7 @@ func (v *View) clearRunes() {
 	}
 }
 
-func (v *View) properWriteRune(x, y int, ch rune) error {
+func (v *View) absWriteRune(x, y int, ch rune) error {
 	v.tainted = true
 
 	if x < 0 || y < 0 {
@@ -481,37 +481,14 @@ func (v *View) properWriteRune(x, y int, ch rune) error {
 // buffer is increased if the point is out of bounds. Overwrite mode is
 // governed by the value of View.overwrite.
 func (v *View) writeRune(x, y int, ch rune) error {
-	v.tainted = true
-
-	x, y, err := v.realPosition(x, y)
+	rx, ry, err := v.realPosition(x, y)
 	if err != nil {
 		return err
 	}
-
-	if x < 0 || y < 0 {
-		return errors.New("invalid point")
-	}
-
-	if y >= len(v.lines) {
-		s := make([][]rune, y-len(v.lines)+1)
-		v.lines = append(v.lines, s...)
-	}
-
-	olen := len(v.lines[y])
-	if x >= len(v.lines[y]) {
-		s := make([]rune, x-len(v.lines[y])+1)
-		v.lines[y] = append(v.lines[y], s...)
-	}
-
-	if !v.Overwrite && x < olen {
-		v.lines[y] = append(v.lines[y], '\x00')
-		copy(v.lines[y][x+1:], v.lines[y][x:])
-	}
-	v.lines[y][x] = ch
-	return nil
+	return v.absWriteRune(rx, ry, ch)
 }
 
-func (v *View) properDeleteRune(x, y int) error {
+func (v *View) absDeleteRune(x, y int) error {
 	v.tainted = true
 
 	if x < 0 || y < 0 || y >= len(v.lines) || x >= len(v.lines[y]) {
@@ -524,42 +501,16 @@ func (v *View) properDeleteRune(x, y int) error {
 // deleteRune removes a rune from the view's internal buffer, at the
 // position corresponding to the point (x, y).
 func (v *View) deleteRune(x, y int) error {
-	v.tainted = true
 
-	x, y, err := v.realPosition(x, y)
+	rx, ry, err := v.realPosition(x, y)
 	if err != nil {
 		return err
 	}
-
-	if x < 0 || y < 0 || y >= len(v.lines) || x >= len(v.lines[y]) {
-		return errors.New("invalid point")
-	}
-	v.lines[y] = append(v.lines[y][:x], v.lines[y][x+1:]...)
-	return nil
+	return v.absDeleteRune(rx, ry)
 }
 
-func (v *View) properMergeLines(y int) error {
+func (v *View) absMergeLines(y int) error {
 	v.tainted = true
-
-	if y < 0 || y >= len(v.lines) {
-		return errors.New("invalid point")
-	}
-
-	if y < len(v.lines)-1 { // otherwise we don't need to merge anything
-		v.lines[y] = append(v.lines[y], v.lines[y+1]...)
-		v.lines = append(v.lines[:y+1], v.lines[y+2:]...)
-	}
-	return nil
-}
-
-// mergeLines merges the lines "y" and "y+1" if possible.
-func (v *View) mergeLines(y int) error {
-	v.tainted = true
-
-	_, y, err := v.realPosition(0, y)
-	if err != nil {
-		return err
-	}
 
 	if y < 0 || y >= len(v.lines) {
 		return errors.New("invalid point")
@@ -573,7 +524,16 @@ func (v *View) mergeLines(y int) error {
 	return errors.New("last line")
 }
 
-func (v *View) properBreakLine(x, y int) error {
+// mergeLines merges the lines "y" and "y+1" if possible.
+func (v *View) mergeLines(y int) error {
+	_, ry, err := v.realPosition(0, y)
+	if err != nil {
+		return err
+	}
+	return v.absMergeLines(ry)
+}
+
+func (v *View) absBreakLine(x, y int) error {
 	v.tainted = true
 
 	if y < 0 || y >= len(v.lines) {
@@ -602,34 +562,11 @@ func (v *View) properBreakLine(x, y int) error {
 // breakLine breaks a line of the internal buffer at the position corresponding
 // to the point (x, y).
 func (v *View) breakLine(x, y int) error {
-	v.tainted = true
-
-	x, y, err := v.realPosition(x, y)
+	rx, ry, err := v.realPosition(x, y)
 	if err != nil {
 		return err
 	}
-
-	if y < 0 || y >= len(v.lines) {
-		return errors.New("invalid point")
-	}
-
-	var left, right []rune
-	if x < len(v.lines[y]) { // break line
-		left = make([]rune, len(v.lines[y][:x]))
-		copy(left, v.lines[y][:x])
-		right = make([]rune, len(v.lines[y][x:]))
-		copy(right, v.lines[y][x:])
-	} else { // new empty line
-		left = v.lines[y]
-	}
-
-	lines := make([][]rune, len(v.lines)+1)
-	lines[y] = left
-	lines[y+1] = right
-	copy(lines, v.lines[:y])
-	copy(lines[y+2:], v.lines[y+1:])
-	v.lines = lines
-	return nil
+	return v.absBreakLine(rx, ry)
 }
 
 // Buffer returns a string with the contents of the view's internal

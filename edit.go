@@ -78,12 +78,12 @@ func (v *View) EditPermutLines(up bool) {
 	if up {
 		if err := v.permutLines(ry-1, ry); err == nil {
 			v.MoveCursor(0, -1, true)
-			v.Actions.Exec(NewPermutCmd(v, rx, ry, -1))
+			v.Actions.Exec(NewUpPermutCmd(v, rx, ry, -1))
 		}
 	} else {
 		if err := v.permutLines(ry+1, ry); err == nil {
 			v.MoveCursor(0, 1, true)
-			v.Actions.Exec(NewPermutCmd(v, rx, ry, +1))
+			v.Actions.Exec(NewDownPermutCmd(v, rx, ry, +1))
 		}
 	}
 }
@@ -386,4 +386,12 @@ func (v *View) MoveCursor(dx, dy int, writeMode bool) {
 			v.moveOneRuneForward(writeMode)
 		}
 	}
+}
+
+// Moves the cursor from the beginning taking into account
+// the width of the line/view, displacing the origin if necessary.
+func (v *View) AbsMoveCursor(x, y int, overWrite bool) {
+	v.SetOrigin(0, 0)
+	v.SetCursor(0, 0)
+	v.MoveCursor(x, y, overWrite)
 }
