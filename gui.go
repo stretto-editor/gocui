@@ -547,7 +547,7 @@ func updateViews(c *Container) {
 
 func (g *Gui) displayViews(c *Container) error {
 	for _, node := range c.childrens {
-		if v, ok := node.(*View); ok {
+		if v, ok := node.(*View); ok && !v.Hidden {
 			if v.Frame {
 				if err := g.drawFrame(v); err != nil {
 					return err
