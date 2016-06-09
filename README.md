@@ -4,6 +4,10 @@
 
 Minimalist Go package aimed at creating Console User Interfaces.
 
+## About the fork
+
+This fork is based on GOCUI v0.2.0. The library was modified to suit the need of [Stretto editor](https://github.com/stretto-editor/stretto).
+
 ## Features
 
 * Minimalist API.
