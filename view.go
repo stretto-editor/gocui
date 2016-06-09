@@ -13,6 +13,96 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
+type geom interface {
+	Size() (x, y int)
+	Name() string
+	Position() (x0, y0, x1, y1 int)
+	draw() error
+}
+
+// Container is a geometry element to create Views hierarchy
+type Container struct {
+	name           string
+	x0, y0, x1, y1 int
+	childrens      []geom
+}
+
+// newView returns a new View object.
+func newViewNode(name string, x0, y0, x1, y1 int) *Container {
+	c := &Container{
+		name: name,
+		x0:   x0,
+		y0:   y0,
+		x1:   x1,
+		y1:   y1,
+	}
+	return c
+}
+
+// Size returns the number of visible columns and rows in the container.
+func (c *Container) Size() (x, y int) {
+	return c.x1 - c.x0 - 1, c.y1 - c.y0 - 1
+}
+
+// Name returns the name of the view.s
+func (c *Container) Name() string {
+	return c.name
+}
+
+// Children returns a slice of children
+func (c *Container) children() []geom {
+	return c.childrens
+}
+
+// Position returns coordinates
+func (c *Container) Position() (int, int, int, int) {
+	return c.x0, c.y0, c.x1, c.y1
+}
+
+func (c *Container) draw() error {
+	for _, g := range c.childrens {
+		g.draw()
+	}
+	return nil
+}
+
+// RoundRobinForward takes the last element in c.childrens and put it
+// at the beginning of the same slice
+func (c *Container) RoundRobinForward() *View {
+	if len(c.childrens) <= 1 {
+		return nil
+	}
+	c.childrens = append(c.childrens[1:], c.childrens[0])
+	if v, ok := c.childrens[len(c.childrens)-1].(*View); ok {
+		return v
+	}
+	return nil
+}
+
+// RoundRobinBackward takes the first element in c.childrens and put it
+// at the end of the same slice
+func (c *Container) RoundRobinBackward() *View {
+	if len(c.childrens) <= 1 {
+		return nil
+	}
+	c.childrens = append(c.childrens[len(c.childrens)-1:len(c.childrens)], c.childrens[:len(c.childrens)-1]...)
+	return c.LastView()
+}
+
+// HasNoChildren checks the length of childrens
+func (c *Container) HasNoChildren() bool {
+	return len(c.childrens) == 0
+}
+
+func (c *Container) LastView() *View {
+	for i := len(c.childrens) - 1; i >= 0; i-- {
+		if v, ok := c.childrens[i].(*View); ok {
+			return v
+		}
+	}
+	return nil
+}
+
 // A View is a window. It maintains its own internal buffer and cursor
 // position.
 type View struct {
@@ -23,6 +113,8 @@ type View struct {
 	lines          [][]rune
 	readOffset     int
 	readCache      string
+
+	Actions Context
 
 	tainted   bool       // marks if the viewBuffer must be updated
 	viewLines []viewLine // internal representation of the view's buffer
@@ -100,6 +192,11 @@ func (v *View) Size() (x, y int) {
 // Name returns the name of the view.
 func (v *View) Name() string {
 	return v.name
+}
+
+// Position returns coordinates
+func (v *View) Position() (int, int, int, int) {
+	return v.x0, v.y0, v.x1, v.y1
 }
 
 // Size returns the number of lines contained in the buffer
@@ -354,17 +451,8 @@ func (v *View) clearRunes() {
 	}
 }
 
-// writeRune writes a rune into the view's internal buffer, at the
-// position corresponding to the point (x, y). The length of the internal
-// buffer is increased if the point is out of bounds. Overwrite mode is
-// governed by the value of View.overwrite.
-func (v *View) writeRune(x, y int, ch rune) error {
+func (v *View) absWriteRune(x, y int, ch rune) error {
 	v.tainted = true
-
-	x, y, err := v.realPosition(x, y)
-	if err != nil {
-		return err
-	}
 
 	if x < 0 || y < 0 {
 		return errors.New("invalid point")
@@ -380,7 +468,6 @@ func (v *View) writeRune(x, y int, ch rune) error {
 		s := make([]rune, x-len(v.lines[y])+1)
 		v.lines[y] = append(v.lines[y], s...)
 	}
-
 	if !v.Overwrite && x < olen {
 		v.lines[y] = append(v.lines[y], '\x00')
 		copy(v.lines[y][x+1:], v.lines[y][x:])
@@ -389,15 +476,20 @@ func (v *View) writeRune(x, y int, ch rune) error {
 	return nil
 }
 
-// deleteRune removes a rune from the view's internal buffer, at the
-// position corresponding to the point (x, y).
-func (v *View) deleteRune(x, y int) error {
-	v.tainted = true
-
-	x, y, err := v.realPosition(x, y)
+// writeRune writes a rune into the view's internal buffer, at the
+// position corresponding to the point (x, y). The length of the internal
+// buffer is increased if the point is out of bounds. Overwrite mode is
+// governed by the value of View.overwrite.
+func (v *View) writeRune(x, y int, ch rune) error {
+	rx, ry, err := v.realPosition(x, y)
 	if err != nil {
 		return err
 	}
+	return v.absWriteRune(rx, ry, ch)
+}
+
+func (v *View) absDeleteRune(x, y int) error {
+	v.tainted = true
 
 	if x < 0 || y < 0 || y >= len(v.lines) || x >= len(v.lines[y]) {
 		return errors.New("invalid point")
@@ -406,14 +498,19 @@ func (v *View) deleteRune(x, y int) error {
 	return nil
 }
 
-// mergeLines merges the lines "y" and "y+1" if possible.
-func (v *View) mergeLines(y int) error {
-	v.tainted = true
+// deleteRune removes a rune from the view's internal buffer, at the
+// position corresponding to the point (x, y).
+func (v *View) deleteRune(x, y int) error {
 
-	_, y, err := v.realPosition(0, y)
+	rx, ry, err := v.realPosition(x, y)
 	if err != nil {
 		return err
 	}
+	return v.absDeleteRune(rx, ry)
+}
+
+func (v *View) absMergeLines(y int) error {
+	v.tainted = true
 
 	if y < 0 || y >= len(v.lines) {
 		return errors.New("invalid point")
@@ -422,19 +519,22 @@ func (v *View) mergeLines(y int) error {
 	if y < len(v.lines)-1 { // otherwise we don't need to merge anything
 		v.lines[y] = append(v.lines[y], v.lines[y+1]...)
 		v.lines = append(v.lines[:y+1], v.lines[y+2:]...)
+		return nil
 	}
-	return nil
+	return errors.New("last line")
 }
 
-// breakLine breaks a line of the internal buffer at the position corresponding
-// to the point (x, y).
-func (v *View) breakLine(x, y int) error {
-	v.tainted = true
-
-	x, y, err := v.realPosition(x, y)
+// mergeLines merges the lines "y" and "y+1" if possible.
+func (v *View) mergeLines(y int) error {
+	_, ry, err := v.realPosition(0, y)
 	if err != nil {
 		return err
 	}
+	return v.absMergeLines(ry)
+}
+
+func (v *View) absBreakLine(x, y int) error {
+	v.tainted = true
 
 	if y < 0 || y >= len(v.lines) {
 		return errors.New("invalid point")
@@ -457,6 +557,16 @@ func (v *View) breakLine(x, y int) error {
 	copy(lines[y+2:], v.lines[y+1:])
 	v.lines = lines
 	return nil
+}
+
+// breakLine breaks a line of the internal buffer at the position corresponding
+// to the point (x, y).
+func (v *View) breakLine(x, y int) error {
+	rx, ry, err := v.realPosition(x, y)
+	if err != nil {
+		return err
+	}
+	return v.absBreakLine(rx, ry)
 }
 
 // Buffer returns a string with the contents of the view's internal
@@ -531,4 +641,17 @@ func (v *View) SetEditable(b bool) {
 }
 func (v *View) IsEditable() bool {
 	return v.Editable
+}
+
+// permutLines permuts y1 and y2
+func (v *View) permutLines(y1, y2 int) error {
+	if y1 < 0 || y2 < 0 || y1 >= len(v.lines) || y2 >= len(v.lines) {
+		return errors.New("invalid line")
+	}
+
+	s := v.lines[y1]
+	v.lines[y1] = v.lines[y2]
+	v.lines[y2] = s
+
+	return nil
 }
