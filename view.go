@@ -113,6 +113,7 @@ type View struct {
 	lines          [][]rune
 	readOffset     int
 	readCache      string
+	searchString   string
 
 	Actions Context
 
@@ -182,6 +183,10 @@ func newView(name string, x0, y0, x1, y1 int) *View {
 		tainted: true,
 	}
 	return v
+}
+
+func (v *View) GetSearchString() string {
+	return v.searchString
 }
 
 // Size returns the number of visible columns and rows in the View.
